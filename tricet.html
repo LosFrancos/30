@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Třicet — Desková hra</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;600;700&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Rajdhani',sans-serif;background:#0a0a1a;color:#eee;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;z-index:-1;
+  background:linear-gradient(rgba(15,188,249,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(15,188,249,.03) 1px,transparent 1px);
+  background-size:60px 60px;animation:gridScroll 20s linear infinite}
+@keyframes gridScroll{to{transform:translate(60px,60px)}}
+
+/* ===== HERO / SETUP ===== */
+#hero{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#heroCanvas{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+
+#setup{
+  max-width:520px;width:100%;padding:36px;position:relative;z-index:2;
+  background:linear-gradient(135deg,rgba(22,33,62,.95),rgba(10,10,26,.98));
+  border-radius:20px;border:1px solid rgba(15,188,249,.2);
+  box-shadow:0 0 60px rgba(15,188,249,.08),0 20px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05);
+  overflow:hidden;
+}
+#setup::before{content:'';position:absolute;top:-2px;left:20%;right:20%;height:2px;
+  background:linear-gradient(90deg,transparent,#0fbcf9,#39ff14,transparent)}
+#setup::after{content:'';position:absolute;bottom:-2px;left:30%;right:30%;height:2px;
+  background:linear-gradient(90deg,transparent,#39ff14,#0fbcf9,transparent)}
+
+/* Neonově zelený název */
+#setup h1{
+  text-align:center;font-family:'Orbitron',sans-serif;
+  font-size:3.2rem;margin-bottom:4px;letter-spacing:8px;
+  color:#39ff14;
+  text-shadow:0 0 10px #39ff14,0 0 30px #39ff14,0 0 60px #39ff14,0 0 100px rgba(57,255,20,.4);
+  -webkit-text-fill-color:#39ff14;
+}
+#setup .subtitle{text-align:center;color:rgba(57,255,20,.5);font-size:1rem;margin-bottom:28px;letter-spacing:3px;text-transform:uppercase}
+#setup label{display:block;margin-bottom:8px;font-weight:700;font-size:1rem;color:#0fbcf9;letter-spacing:1px;text-transform:uppercase}
+#setup select,#playerNames input{
+  width:100%;padding:12px 16px;border:1px solid rgba(15,188,249,.25);border-radius:10px;
+  background:rgba(10,10,26,.8);color:#eee;font-family:'Rajdhani',sans-serif;font-size:1.05rem;
+  margin-bottom:10px;outline:none;transition:border-color .3s,box-shadow .3s}
+#setup select:focus,#playerNames input:focus{border-color:#0fbcf9;box-shadow:0 0 16px rgba(15,188,249,.2)}
+#playerNames{margin-top:12px}
+#playerNames input{margin-bottom:8px}
+#startBtn{
+  width:100%;padding:16px;margin-top:16px;
+  background:linear-gradient(135deg,#39ff14,#2bc40e);
+  border:none;border-radius:12px;color:#0a0a1a;
+  font-family:'Orbitron',sans-serif;font-size:1.1rem;font-weight:700;letter-spacing:3px;
+  cursor:pointer;text-transform:uppercase;transition:all .3s;position:relative;overflow:hidden}
+#startBtn::before{content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,transparent 30%,rgba(255,255,255,.2) 50%,transparent 70%);
+  transform:translateX(-100%);transition:transform .5s}
+#startBtn:hover::before{transform:translateX(100%)}
+#startBtn:hover{box-shadow:0 0 40px rgba(57,255,20,.4);transform:translateY(-2px)}
+
+.color-picker{margin:20px 0 8px}
+.color-options{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.color-opt{width:46px;height:46px;border-radius:12px;cursor:pointer;border:2px solid rgba(255,255,255,.1);transition:all .3s;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.color-opt:hover{transform:scale(1.15)}
+.color-opt.active{border-color:#39ff14;box-shadow:0 0 18px rgba(57,255,20,.5);transform:scale(1.15)}
+.color-opt.rainbow{background:conic-gradient(#ff0000,#ff8800,#ffff00,#00ff00,#0088ff,#8800ff,#ff0088,#ff0000)}
+
+/* ===== GAME ===== */
+#game{display:none;max-width:1100px;margin:20px auto;padding:0 16px}
+.game-header{display:flex;align-items:center;justify-content:center;gap:20px;margin-bottom:16px;position:relative}
+.game-header h1{font-family:'Orbitron',sans-serif;font-size:1.6rem;letter-spacing:4px;
+  color:#39ff14;text-shadow:0 0 8px #39ff14,0 0 20px rgba(57,255,20,.4)}
+#menuBtn{
+  position:absolute;right:0;padding:10px 20px;
+  background:linear-gradient(135deg,rgba(233,69,96,.8),rgba(199,54,80,.9));
+  border:1px solid rgba(233,69,96,.4);border-radius:10px;color:#fff;
+  font-family:'Orbitron',sans-serif;font-size:.7rem;font-weight:700;letter-spacing:2px;
+  cursor:pointer;text-transform:uppercase;transition:all .3s}
+#menuBtn:hover{box-shadow:0 0 20px rgba(233,69,96,.4);transform:translateY(-2px)}
+
+.players-bar{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:20px}
+.player-card{
+  background:linear-gradient(135deg,rgba(22,33,62,.9),rgba(15,20,40,.95));
+  border:1px solid rgba(15,188,249,.15);border-radius:14px;
+  padding:14px 20px;min-width:130px;text-align:center;transition:all .4s;box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.player-card.active{border-color:#e94560;box-shadow:0 0 24px rgba(233,69,96,.3),0 4px 20px rgba(0,0,0,.3)}
+.player-card.dead{opacity:.3;filter:grayscale(.8)}
+.player-card .name{font-family:'Orbitron',sans-serif;font-size:.8rem;font-weight:700;margin-bottom:4px}
+.player-card .lives{font-size:.9rem;color:#0fbcf9}
+.player-card .lives-bar{height:5px;background:rgba(255,255,255,.08);border-radius:3px;margin-top:8px;overflow:hidden}
+.player-card .lives-fill{height:100%;background:linear-gradient(90deg,#e94560,#0fbcf9);border-radius:3px;transition:width .5s}
+
+.game-area{
+  background:linear-gradient(135deg,rgba(22,33,62,.9),rgba(10,10,26,.95));
+  border:1px solid rgba(15,188,249,.1);border-radius:20px;padding:32px;text-align:center;margin-bottom:20px;box-shadow:0 8px 40px rgba(0,0,0,.3)}
+.turn-info{font-size:1.3rem;margin-bottom:6px;letter-spacing:1px}
+.turn-info span{color:#e94560;font-weight:700;font-family:'Orbitron',sans-serif}
+.sum-display{font-size:1.15rem;color:#0fbcf9;margin-bottom:16px;font-weight:700}
+
+/* 3D Dice */
+.dice-container{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin:28px 0;min-height:120px;align-items:center;perspective:1000px}
+.die-wrapper{width:80px;height:80px;perspective:800px;cursor:pointer;position:relative;transition:transform .25s ease,opacity .3s ease,filter .3s ease}
+.die-wrapper:not(.kept-wrapper):hover{transform:scale(1.10);z-index:2}
+.die-wrapper.selected-wrapper{filter:brightness(1.3) drop-shadow(0 0 16px rgba(233,69,96,.6));transform:scale(1.08);z-index:2}
+.die-wrapper.selected-wrapper::after{content:'';position:absolute;inset:-5px;border-radius:16px;border:2px solid #e94560;pointer-events:none;box-shadow:0 0 14px rgba(233,69,96,.4)}
+.die-wrapper.selected-wrapper:hover{transform:scale(1.15)}
+.die-wrapper.unselected-wrapper{filter:brightness(.7);opacity:.7}
+.die-wrapper.kept-wrapper{cursor:default;opacity:.4;transform:scale(.85);filter:brightness(.6)}
+.die-wrapper.hit-wrapper{filter:brightness(1.3) drop-shadow(0 0 16px rgba(233,69,96,.6))}
+.die-wrapper.hit-wrapper::after{content:'';position:absolute;inset:-5px;border-radius:16px;border:2px solid #e94560;pointer-events:none;box-shadow:0 0 14px rgba(233,69,96,.4)}
+
+.die-cube{width:80px;height:80px;position:relative;transform-style:preserve-3d;transition:transform .35s ease}
+.die-face{position:absolute;width:80px;height:80px;border-radius:13px;display:grid;padding:14px;backface-visibility:hidden;
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.12),inset 0 -1px 3px rgba(255,255,255,.08)}
+.face-1{transform:rotateY(0deg) translateZ(40px)}
+.face-2{transform:rotateY(90deg) translateZ(40px)}
+.face-3{transform:rotateX(90deg) translateZ(40px)}
+.face-4{transform:rotateX(-90deg) translateZ(40px)}
+.face-5{transform:rotateY(-90deg) translateZ(40px)}
+.face-6{transform:rotateY(180deg) translateZ(40px)}
+
+.die-face .dot{width:14px;height:14px;border-radius:50%;box-shadow:inset 0 2px 4px rgba(0,0,0,.35),0 1px 1px rgba(255,255,255,.1)}
+
+/* Dot layouts — opraveno */
+.face-1{grid-template:1fr/1fr;place-items:center}
+.face-2{grid-template-rows:1fr 1fr;grid-template-columns:1fr 1fr}
+.face-2 .dot:nth-child(1){grid-row:1;grid-column:2;justify-self:end;align-self:start}
+.face-2 .dot:nth-child(2){grid-row:2;grid-column:1;justify-self:start;align-self:end}
+.face-3{grid-template-rows:1fr 1fr 1fr;grid-template-columns:1fr}
+.face-3 .dot:nth-child(1){align-self:start;justify-self:end}
+.face-3 .dot:nth-child(2){align-self:center;justify-self:center}
+.face-3 .dot:nth-child(3){align-self:end;justify-self:start}
+.face-4{grid-template:1fr 1fr/1fr 1fr;place-items:center}
+.face-5{grid-template:1fr 1fr 1fr/1fr 1fr}
+.face-5 .dot:nth-child(1){align-self:start;justify-self:start}
+.face-5 .dot:nth-child(2){align-self:start;justify-self:end}
+.face-5 .dot:nth-child(3){align-self:center;justify-self:center;grid-column:1/-1}
+.face-5 .dot:nth-child(4){align-self:end;justify-self:start}
+.face-5 .dot:nth-child(5){align-self:end;justify-self:end}
+.face-6{grid-template:1fr 1fr 1fr/1fr 1fr;place-items:center}
+
+@keyframes rainbowShift{0%{background:#ff4444}16%{background:#ff8800}33%{background:#ffdd00}50%{background:#44dd44}66%{background:#4488ff}83%{background:#8844ff}100%{background:#ff4444}}
+.die-face.rainbow-face{animation:rainbowShift 2.5s linear infinite}
+
+.die-shadow{position:absolute;bottom:-8px;left:50%;width:60px;height:12px;
+  background:radial-gradient(ellipse,rgba(0,0,0,.35) 0%,transparent 70%);border-radius:50%;transform:translateX(-50%)}
+
+/* Buttons */
+.actions{margin-top:20px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{padding:13px 32px;border:none;border-radius:12px;font-family:'Orbitron',sans-serif;font-size:.85rem;font-weight:700;
+  cursor:pointer;transition:all .3s;letter-spacing:1px;text-transform:uppercase;position:relative;overflow:hidden}
+.btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent 30%,rgba(255,255,255,.12) 50%,transparent 70%);
+  transform:translateX(-100%);transition:transform .4s}
+.btn:hover::before{transform:translateX(100%)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn:disabled::before{display:none}
+.btn-roll{background:linear-gradient(135deg,#e94560,#c73650);color:#fff}
+.btn-roll:hover:not(:disabled){box-shadow:0 0 24px rgba(233,69,96,.4);transform:translateY(-2px)}
+.btn-keep{background:linear-gradient(135deg,#0fbcf9,#0a8fc2);color:#0a0a1a}
+.btn-keep:hover:not(:disabled){box-shadow:0 0 24px rgba(15,188,249,.4);transform:translateY(-2px)}
+.btn-end{background:linear-gradient(135deg,#533483,#7044a2);color:#fff}
+.btn-end:hover:not(:disabled){box-shadow:0 0 24px rgba(83,52,131,.4);transform:translateY(-2px)}
+
+.message{margin-top:18px;padding:16px;background:rgba(15,188,249,.06);border:1px solid rgba(15,188,249,.1);
+  border-radius:12px;font-size:1.05rem;line-height:1.6;min-height:54px}
+.log{background:linear-gradient(135deg,rgba(22,33,62,.9),rgba(10,10,26,.95));border:1px solid rgba(15,188,249,.1);
+  border-radius:14px;padding:18px;max-height:200px;overflow-y:auto}
+.log h3{margin-bottom:8px;color:#e94560;font-family:'Orbitron',sans-serif;font-size:.9rem;letter-spacing:2px}
+.log p{font-size:.85rem;color:#777;margin-bottom:4px}
+.log p:first-of-type{color:#ccc}
+
+#winner-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
+#winner-overlay.show{display:flex}
+#winner-box{background:linear-gradient(135deg,rgba(22,33,62,.98),rgba(10,10,26,.99));padding:50px 70px;border-radius:24px;text-align:center;
+  border:1px solid rgba(57,255,20,.3);box-shadow:0 0 80px rgba(57,255,20,.15)}
+#winner-box h2{font-family:'Orbitron',sans-serif;font-size:2.4rem;color:#39ff14;
+  text-shadow:0 0 10px #39ff14,0 0 30px rgba(57,255,20,.4);margin-bottom:12px}
+#winner-box p{font-size:1.3rem;margin-bottom:28px;color:#aaa}
+#winner-box button{padding:16px 40px;background:linear-gradient(135deg,#39ff14,#2bc40e);border:none;border-radius:12px;color:#0a0a1a;
+  font-family:'Orbitron',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;letter-spacing:2px;transition:all .3s}
+#winner-box button:hover{box-shadow:0 0 30px rgba(57,255,20,.4);transform:translateY(-2px)}
+
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(57,255,20,.3);border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div id="hero">
+  <canvas id="heroCanvas"></canvas>
+  <div id="setup">
+    <h1>TŘICET</h1>
+    <p class="subtitle">Desková hra s kostkami</p>
+    <label for="numPlayers">Počet hráčů (2–8)</label>
+    <select id="numPlayers">
+      <option value="2">2 hráči</option><option value="3">3 hráči</option>
+      <option value="4" selected>4 hráči</option><option value="5">5 hráčů</option>
+      <option value="6">6 hráčů</option><option value="7">7 hráčů</option>
+      <option value="8">8 hráčů</option>
+    </select>
+    <div id="playerNames"></div>
+    <div class="color-picker">
+      <label>Barva kostek</label>
+      <div class="color-options" id="colorOptions"></div>
+    </div>
+    <button id="startBtn">Začít hru</button>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="game">
+  <div class="game-header">
+    <h1>TŘICET</h1>
+    <button id="menuBtn" onclick="backToMenu()">Menu</button>
+  </div>
+  <div class="players-bar" id="playersBar"></div>
+  <div class="game-area">
+    <div class="turn-info" id="turnInfo"></div>
+    <div class="sum-display" id="sumDisplay"></div>
+    <div class="dice-container" id="diceContainer"></div>
+    <div class="actions" id="actions"></div>
+    <div class="message" id="message"></div>
+  </div>
+  <div class="log" id="log"><h3>Historie</h3></div>
+</div>
+
+<!-- WINNER -->
+<div id="winner-overlay">
+  <div id="winner-box">
+    <h2 id="winnerTitle"></h2>
+    <p id="winnerText"></p>
+    <button onclick="location.reload()">Nová hra</button>
+  </div>
+</div>
+
+<script>
+// ===== HERO CANVAS ANIMATION =====
+(function(){
+  const canvas = document.getElementById('heroCanvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, items = [];
+
+  function resize(){
+    const rect = canvas.parentElement.getBoundingClientRect();
+    W = canvas.width = rect.width;
+    H = canvas.height = rect.height;
+    // Recalculate item positions on resize
+    items.forEach(item => {
+      const cx = W / 2, menuHalf = 280;
+      if (item.side === 'left') {
+        const leftEnd = Math.max(cx - menuHalf, 60);
+        item.x = 30 + Math.random() * (leftEnd - 50);
+      } else {
+        const rightStart = Math.min(cx + menuHalf, W - 60);
+        item.x = rightStart + Math.random() * (W - rightStart - 30);
+      }
+    });
+  }
+  window.addEventListener('resize', resize); resize();
+
+  // Floating item types — evenly on both sides of the center menu
+  function createItem(forceSide){
+    const types = ['die','thirty','cup'];
+    const type = types[Math.floor(Math.random()*types.length)];
+    const size = 30 + Math.random()*40;
+    // Menu is ~520px wide centered, so we need items in left and right bands
+    const menuHalf = 280; // half menu width + some gap
+    const cx = W / 2;
+    const side = forceSide || (Math.random() < 0.5 ? 'left' : 'right');
+    let x;
+    if (side === 'left') {
+      // From left edge to left edge of menu
+      const leftEnd = Math.max(cx - menuHalf, 60);
+      x = 30 + Math.random() * (leftEnd - 50);
+    } else {
+      // From right edge of menu to right edge
+      const rightStart = Math.min(cx + menuHalf, W - 60);
+      x = rightStart + Math.random() * (W - rightStart - 30);
+    }
+    return {
+      type, x, y: Math.random()*H, size, side,
+      vy: -0.3 - Math.random()*0.6,
+      vx: (Math.random()-0.5)*0.3,
+      rot: Math.random()*360,
+      vrot: (Math.random()-0.5)*1.5,
+      alpha: 0.1 + Math.random()*0.18,
+      dieVal: Math.floor(Math.random()*6)+1
+    };
+  }
+
+  // Half left, half right to guarantee even distribution
+  for(let i=0;i<14;i++) items.push(createItem('left'));
+  for(let i=0;i<14;i++) items.push(createItem('right'));
+
+  function drawDie(item){
+    ctx.save();
+    ctx.translate(item.x, item.y);
+    ctx.rotate(item.rot * Math.PI/180);
+    ctx.globalAlpha = item.alpha;
+    const s = item.size;
+    // Die body
+    ctx.fillStyle = '#39ff14';
+    ctx.strokeStyle = '#39ff14';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(-s/2,-s/2,s,s,s*0.18);
+    ctx.stroke();
+    // Dots
+    ctx.fillStyle = '#39ff14';
+    const d = s*0.16;
+    const positions = {
+      1:[[0,0]],
+      2:[[-1,-1],[1,1]],
+      3:[[-1,-1],[0,0],[1,1]],
+      4:[[-1,-1],[1,-1],[-1,1],[1,1]],
+      5:[[-1,-1],[1,-1],[0,0],[-1,1],[1,1]],
+      6:[[-1,-1],[1,-1],[-1,0],[1,0],[-1,1],[1,1]]
+    };
+    const pts = positions[item.dieVal];
+    const spacing = s * 0.25;
+    pts.forEach(([px,py])=>{
+      ctx.beginPath();
+      ctx.arc(px*spacing, py*spacing, d/2, 0, Math.PI*2);
+      ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  function drawThirty(item){
+    ctx.save();
+    ctx.translate(item.x, item.y);
+    ctx.rotate(item.rot * Math.PI/180);
+    ctx.globalAlpha = item.alpha;
+    ctx.font = `900 ${item.size*1.2}px Orbitron`;
+    ctx.fillStyle = '#39ff14';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('30',0,0);
+    ctx.restore();
+  }
+
+  function drawCup(item){
+    ctx.save();
+    ctx.translate(item.x, item.y);
+    ctx.rotate(item.rot * Math.PI/180);
+    ctx.globalAlpha = item.alpha;
+    ctx.strokeStyle = '#39ff14';
+    ctx.lineWidth = 1.5;
+    const s = item.size;
+    // Trapezoid cup shape
+    ctx.beginPath();
+    ctx.moveTo(-s*0.35,-s*0.5);
+    ctx.lineTo(s*0.35,-s*0.5);
+    ctx.lineTo(s*0.25,s*0.4);
+    ctx.lineTo(-s*0.25,s*0.4);
+    ctx.closePath();
+    ctx.stroke();
+    // Rim
+    ctx.beginPath();
+    ctx.ellipse(0,-s*0.5,s*0.35,s*0.08,0,0,Math.PI*2);
+    ctx.stroke();
+    // Small dice peeking out
+    const ds = s*0.18;
+    ctx.strokeRect(-ds,-s*0.55,ds*1.2,ds*1.2);
+    ctx.beginPath();ctx.arc(-ds*0.4,-s*0.49+ds*0.6,ds*0.15,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+
+  function animate(){
+    ctx.clearRect(0,0,W,H);
+    items.forEach(item=>{
+      item.y += item.vy;
+      item.x += item.vx;
+      item.rot += item.vrot;
+      if(item.y < -60){
+        const oldSide = item.side;
+        Object.assign(item, createItem(oldSide));
+        item.y = H + 60;
+      }
+      if(item.type==='die') drawDie(item);
+      else if(item.type==='thirty') drawThirty(item);
+      else drawCup(item);
+    });
+    requestAnimationFrame(animate);
+  }
+  animate();
+})();
+
+// ===== GAME =====
+const MAX_LIVES=30,TARGET=30,BONUS_FOR_EXACT=2,TOTAL_DICE=6;
+
+const DICE_COLORS=[
+  {name:'Bílá',color:'#ffffff',dot:'#1a1a2e'},
+  {name:'Červená',color:'#e94560',dot:'#fff'},
+  {name:'Modrá',color:'#0fbcf9',dot:'#1a1a2e'},
+  {name:'Zelená',color:'#2ecc71',dot:'#1a1a2e'},
+  {name:'Zlatá',color:'#f1c40f',dot:'#1a1a2e'},
+  {name:'Fialová',color:'#9b59b6',dot:'#fff'},
+  {name:'Černá',color:'#2c2c2c',dot:'#fff'},
+  {name:'Duhová',color:'rainbow',dot:'#1a1a2e'},
+];
+
+let selectedColor=DICE_COLORS[0];
+let players=[],currentPlayerIdx=0;
+let dice=[],keptDice=[],availableDice=0,turnSum=0;
+let phase='roll',penaltyTarget=0,penaltyDiceLeft=0,penaltyKept=[],penaltySum=0;
+let isAnimating=false;
+
+const FACE_ROT={1:{rx:0,ry:0},2:{rx:0,ry:-90},3:{rx:-90,ry:0},4:{rx:90,ry:0},5:{rx:0,ry:90},6:{rx:0,ry:180}};
+
+// Physics throw
+function animateDiceThrow(cubes,targets,onDone){
+  const n=cubes.length,states=[];
+  for(let i=0;i<n;i++){
+    const spread=(i-(n-1)/2)*45;
+    states.push({
+      x:spread+(Math.random()-.5)*30, y:-320-Math.random()*100, z:220+Math.random()*120,
+      vx:(Math.random()-.5)*7, vy:1.5+Math.random()*2.5, vz:-10-Math.random()*5,
+      rx:Math.random()*360, ry:Math.random()*360, rz:Math.random()*360,
+      vrx:14+Math.random()*18, vry:14+Math.random()*18, vrz:6+Math.random()*10,
+      bounces:0, settled:false
+    });
+  }
+  const G=1.1,BD=0.33,FR=0.95,SD=0.962,MB=4,t0=performance.now(),MD=1900;
+
+  function step(now){
+    const el=now-t0;let all=true;
+    for(let i=0;i<n;i++){
+      const s=states[i];if(s.settled)continue;
+      s.vy+=G; s.x+=s.vx; s.y+=s.vy; s.z+=s.vz;
+      s.rx+=s.vrx; s.ry+=s.vry; s.rz+=s.vrz;
+      if(s.y>=0){
+        s.y=0; s.vy=-Math.abs(s.vy)*BD;
+        s.vx*=FR; s.vz*=FR*.8;
+        s.vrx*=.55; s.vry*=.55; s.vrz*=.55;
+        s.bounces++;
+        if(s.bounces>=MB||Math.abs(s.vy)<1.5){s.settled=true;s.y=0}
+      }
+      s.vrx*=SD; s.vry*=SD; s.vrz*=SD; s.vz*=.91;
+      if(!s.settled)all=false;
+      cubes[i].style.transform=`translate3d(${s.x}px,${s.y}px,${s.z}px) rotateX(${s.rx}deg) rotateY(${s.ry}deg) rotateZ(${s.rz}deg)`;
+      cubes[i].style.opacity='1';
+    }
+    if(el>MD)all=true;
+    if(!all){requestAnimationFrame(step)}
+    else{
+      for(let i=0;i<n;i++){
+        const r=FACE_ROT[targets[i]];
+        cubes[i].style.transition='transform .4s cubic-bezier(.25,.8,.25,1)';
+        cubes[i].style.transform=`translate3d(0,0,0) rotateX(${r.rx}deg) rotateY(${r.ry}deg) rotateZ(0deg)`;
+      }
+      setTimeout(onDone,450);
+    }
+  }
+  cubes.forEach(c=>{c.style.opacity='0';c.style.transition='none'});
+  requestAnimationFrame(()=>requestAnimationFrame(step));
+}
+
+// Color picker
+(function(){
+  const ct=document.getElementById('colorOptions');
+  DICE_COLORS.forEach((c,i)=>{
+    const el=document.createElement('div');
+    el.className='color-opt'+(i===0?' active':'')+(c.color==='rainbow'?' rainbow':'');
+    el.title=c.name;
+    if(c.color!=='rainbow'){el.style.background=c.color;if(c.color==='#ffffff')el.style.borderColor='#555'}
+    el.addEventListener('click',()=>{
+      document.querySelectorAll('.color-opt').forEach(e=>e.classList.remove('active'));
+      el.classList.add('active');selectedColor=c;
+    });
+    ct.appendChild(el);
+  });
+})();
+
+// Setup
+const numPEl=document.getElementById('numPlayers'),pnEl=document.getElementById('playerNames');
+function updateNameInputs(){
+  const n=parseInt(numPEl.value);pnEl.innerHTML='';
+  for(let i=0;i<n;i++){const inp=document.createElement('input');inp.placeholder=`Hráč ${i+1}`;inp.value=`Hráč ${i+1}`;pnEl.appendChild(inp)}
+}
+numPEl.addEventListener('change',updateNameInputs);updateNameInputs();
+
+document.getElementById('startBtn').addEventListener('click',()=>{
+  const inputs=pnEl.querySelectorAll('input');players=[];
+  inputs.forEach((inp,i)=>{players.push({name:inp.value.trim()||`Hráč ${i+1}`,lives:MAX_LIVES,alive:true})});
+  document.getElementById('hero').style.display='none';
+  document.getElementById('game').style.display='block';
+  currentPlayerIdx=0;skipDeadPlayers();startTurn();
+});
+
+function backToMenu(){
+  document.getElementById('game').style.display='none';
+  document.getElementById('hero').style.display='flex';
+  document.getElementById('winner-overlay').classList.remove('show');
+  players=[];dice=[];keptDice=[];phase='roll';isAnimating=false;
+}
+
+// 3D Dice DOM
+function createDieFace(num){
+  const face=document.createElement('div');
+  const rb=selectedColor.color==='rainbow';
+  face.className='die-face face-'+num+(rb?' rainbow-face':'');
+  if(!rb)face.style.background=selectedColor.color;
+  for(let i=0;i<num;i++){const d=document.createElement('div');d.className='dot';d.style.background=selectedColor.dot;face.appendChild(d)}
+  return face;
+}
+function buildDieDOM(val,opts={}){
+  const w=document.createElement('div');w.className='die-wrapper';
+  if(opts.kept)w.classList.add('kept-wrapper');
+  if(opts.selected)w.classList.add('selected-wrapper');
+  if(opts.unselected)w.classList.add('unselected-wrapper');
+  if(opts.hit)w.classList.add('hit-wrapper');
+  const c=document.createElement('div');c.className='die-cube';
+  for(let f=1;f<=6;f++)c.appendChild(createDieFace(f));
+  if(!opts.animate){const r=FACE_ROT[val];c.style.transform=`rotateX(${r.rx}deg) rotateY(${r.ry}deg)`}
+  const sh=document.createElement('div');sh.className='die-shadow';
+  w.appendChild(c);w.appendChild(sh);
+  return{wrapper:w,cube:c};
+}
+
+// Rendering
+function renderPlayers(){
+  const bar=document.getElementById('playersBar');bar.innerHTML='';
+  players.forEach((p,i)=>{
+    const card=document.createElement('div');
+    card.className='player-card'+(i===currentPlayerIdx?' active':'')+(!p.alive?' dead':'');
+    const pct=Math.max(0,p.lives/MAX_LIVES*100);
+    card.innerHTML=`<div class="name">${esc(p.name)}</div><div class="lives">${p.alive?p.lives+'/'+MAX_LIVES+' životů':'Vyřazen'}</div><div class="lives-bar"><div class="lives-fill" style="width:${pct}%"></div></div>`;
+    bar.appendChild(card);
+  });
+}
+function renderDiceStatic(){
+  const c=document.getElementById('diceContainer');c.innerHTML='';
+  const anySel=dice.some(d=>d._selected);
+  keptDice.forEach(d=>{c.appendChild(buildDieDOM(d.value,{kept:true}).wrapper)});
+  dice.forEach((v,i)=>{
+    const{wrapper}=buildDieDOM(v.value,{selected:v._selected,unselected:anySel&&!v._selected&&phase==='select'});
+    wrapper.addEventListener('click',()=>toggleDieSelection(i));c.appendChild(wrapper);
+  });
+}
+function renderDiceAnimated(onDone){
+  const c=document.getElementById('diceContainer');c.innerHTML='';const cubes=[],vals=[];
+  keptDice.forEach(d=>{c.appendChild(buildDieDOM(d.value,{kept:true}).wrapper)});
+  dice.forEach((v,i)=>{
+    const{wrapper,cube}=buildDieDOM(v.value,{animate:true});
+    wrapper.addEventListener('click',()=>toggleDieSelection(i));c.appendChild(wrapper);cubes.push(cube);vals.push(v.value);
+  });
+  animateDiceThrow(cubes,vals,onDone);
+}
+function renderPenaltyStatic(){
+  const c=document.getElementById('diceContainer');c.innerHTML='';
+  penaltyKept.forEach(d=>{c.appendChild(buildDieDOM(d.value,{kept:true}).wrapper)});
+  dice.forEach(v=>{c.appendChild(buildDieDOM(v.value,{hit:v.value===penaltyTarget}).wrapper)});
+}
+function renderPenaltyAnimated(onDone){
+  const c=document.getElementById('diceContainer');c.innerHTML='';const cubes=[],vals=[];
+  penaltyKept.forEach(d=>{c.appendChild(buildDieDOM(d.value,{kept:true}).wrapper)});
+  dice.forEach(v=>{const{wrapper,cube}=buildDieDOM(v.value,{animate:true});c.appendChild(wrapper);cubes.push(cube);vals.push(v.value)});
+  animateDiceThrow(cubes,vals,onDone);
+}
+function renderActions(){
+  const el=document.getElementById('actions');el.innerHTML='';
+  if(phase==='roll')el.innerHTML=`<button class="btn btn-roll" onclick="rollDice()" ${isAnimating?'disabled':''}>Hodit kostkami (${availableDice})</button>`;
+  else if(phase==='select'){const a=dice.some(d=>d._selected);el.innerHTML=`<button class="btn btn-keep" ${a?'':'disabled'} onclick="keepSelected()">Vzít vybrané kostky</button>`}
+  else if(phase==='penalty')el.innerHTML=`<button class="btn btn-roll" onclick="rollPenalty()" ${isAnimating?'disabled':''}>Hodit ${penaltyDiceLeft} kostkami — hledáš ${penaltyTarget}</button>`;
+  else if(phase==='penaltyResult')el.innerHTML=`<button class="btn btn-end" onclick="endPenalty()">Pokračovat</button>`;
+}
+function setMessage(m){document.getElementById('message').innerHTML=m}
+function updateSum(){document.getElementById('sumDisplay').innerHTML=`Součet: <strong>${turnSum}</strong> / ${TARGET}`}
+
+// Game logic
+function startTurn(){
+  dice=[];keptDice=[];availableDice=TOTAL_DICE;turnSum=0;phase='roll';
+  const p=players[currentPlayerIdx];
+  document.getElementById('turnInfo').innerHTML=`Na tahu: <span>${esc(p.name)}</span>`;
+  updateSum();renderPlayers();renderDiceStatic();renderActions();
+  setMessage(`${esc(p.name)}, hoď kostkami!`);
+}
+function rollDice(){
+  if(isAnimating)return;dice=[];
+  for(let i=0;i<availableDice;i++)dice.push({value:randDie(),_selected:false});
+  phase='select';isAnimating=true;renderActions();setMessage('Kostky letí…');
+  renderDiceAnimated(()=>{isAnimating=false;renderDiceStatic();renderActions();setMessage('Vyber alespoň jednu kostku, kterou si chceš vzít.')});
+}
+function toggleDieSelection(i){
+  if(phase!=='select'||isAnimating)return;
+  dice[i]._selected=!dice[i]._selected;renderDiceStatic();renderActions();
+}
+function keepSelected(){
+  const sel=dice.filter(d=>d._selected);if(!sel.length)return;
+  sel.forEach(d=>{keptDice.push({value:d.value});turnSum+=d.value});
+  dice=dice.filter(d=>!d._selected);availableDice-=sel.length;
+  dice.forEach(d=>d._selected=false);updateSum();
+  if(availableDice===0)evaluateTurn();
+  else{phase='roll';renderDiceStatic();renderActions();setMessage(`Vzal jsi ${sel.length} kostek. Hoď zbylými ${availableDice}!`)}
+}
+function evaluateTurn(){
+  const p=players[currentPlayerIdx];
+  if(turnSum<TARGET){
+    const d=TARGET-turnSum;p.lives-=d;
+    addLog(`${p.name}: součet ${turnSum} → −${d} životů (zbývá ${p.lives})`);
+    setMessage(`Součet: ${turnSum}. Chybí ti ${d} do 30 → ztrácíš <strong>${d} životů</strong>!`);
+    checkAlive(p);phase='done';renderPlayers();renderDiceStatic();renderActions();
+    setTimeout(()=>nextPlayer(),2500);
+  }else if(turnSum===TARGET){
+    p.lives=Math.min(MAX_LIVES,p.lives+BONUS_FOR_EXACT);
+    addLog(`${p.name}: přesně 30! +${BONUS_FOR_EXACT} životy (zbývá ${p.lives})`);
+    setMessage(`Přesně 30! Získáváš <strong>+${BONUS_FOR_EXACT} životy</strong>!`);
+    phase='done';renderPlayers();renderDiceStatic();renderActions();
+    setTimeout(()=>nextPlayer(),2500);
+  }else{
+    penaltyTarget=turnSum-TARGET;penaltyDiceLeft=TOTAL_DICE;penaltyKept=[];penaltySum=0;
+    const ni=getNextAlive(currentPlayerIdx);
+    addLog(`${p.name}: součet ${turnSum} (o ${penaltyTarget} více) → háže na ${penaltyTarget}, postihy jdou na ${players[ni].name}`);
+    setMessage(`Součet: ${turnSum}! To je o <strong>${penaltyTarget}</strong> více než 30. Házíš kostkami a sbíráš číslo <strong>${penaltyTarget}</strong>. Sebrané kostky ublíží hráči <strong>${esc(players[ni].name)}</strong>!`);
+    phase='penalty';dice=[];keptDice=[];renderDiceStatic();renderActions();
+  }
+}
+function rollPenalty(){
+  if(isAnimating)return;dice=[];
+  for(let i=0;i<penaltyDiceLeft;i++)dice.push({value:randDie(),_selected:false});
+  isAnimating=true;renderActions();setMessage('Kostky letí…');
+  renderPenaltyAnimated(()=>{
+    isAnimating=false;const hits=dice.filter(d=>d.value===penaltyTarget);
+    phase='penaltyResult';renderPenaltyStatic();renderActions();
+    const p=players[currentPlayerIdx],ni=getNextAlive(currentPlayerIdx),np=players[ni];
+    if(hits.length>0){
+      hits.forEach(d=>{penaltyKept.push({value:d.value});penaltySum+=d.value});
+      penaltyDiceLeft-=hits.length;
+      if(penaltyDiceLeft===0){penaltyDiceLeft=TOTAL_DICE;penaltyKept=[];
+        setMessage(`Padlo ${hits.length}× <strong>${penaltyTarget}</strong>! Všechny kostky sebrány (celkem ${penaltySum}). Bereš všech 6 kostek a házíš znovu!`)}
+      else setMessage(`Padlo ${hits.length}× <strong>${penaltyTarget}</strong>! Celkem sebráno: ${penaltySum}. Házíš zbylými <strong>${penaltyDiceLeft}</strong> kostkami.`);
+    }else{
+      if(penaltySum>0){np.lives-=penaltySum;
+        addLog(`${p.name}: ${penaltyTarget} nepadlo, konec. ${np.name} −${penaltySum} životů (zbývá ${np.lives})`);
+        setMessage(`Číslo ${penaltyTarget} nepadlo! Konec házení. <strong>${esc(np.name)}</strong> ztrácí <strong>${penaltySum} životů</strong>.`);
+        checkAlive(np);renderPlayers();
+      }else{addLog(`${p.name}: ${penaltyTarget} vůbec nepadlo, ${np.name} má štěstí!`);
+        setMessage(`Číslo ${penaltyTarget} nepadlo! <strong>${esc(np.name)}</strong> má štěstí — žádné životy neztrácí.`)}
+    }
+  });
+}
+function endPenalty(){
+  if(penaltyDiceLeft>0&&dice.some(d=>d.value===penaltyTarget)){dice=[];phase='penalty';renderPenaltyStatic();renderActions();return}
+  nextPlayer();
+}
+function getNextAlive(f){let i=(f+1)%players.length,s=0;while(!players[i].alive&&s<players.length){i=(i+1)%players.length;s++}return i}
+function checkAlive(p){if(p.lives<=0){p.lives=0;p.alive=false;addLog(`${p.name} byl vyřazen!`)}}
+function nextPlayer(){const a=players.filter(p=>p.alive);if(a.length<=1){showWinner(a[0]);return}currentPlayerIdx=(currentPlayerIdx+1)%players.length;skipDeadPlayers();startTurn()}
+function skipDeadPlayers(){let s=0;while(!players[currentPlayerIdx].alive&&s<players.length){currentPlayerIdx=(currentPlayerIdx+1)%players.length;s++}}
+function showWinner(w){document.getElementById('winner-overlay').classList.add('show');
+  document.getElementById('winnerTitle').textContent=w?`${w.name} vyhrává!`:'Remíza!';
+  document.getElementById('winnerText').textContent=w?`Vítěz se ${w.lives} životy!`:'Všichni hráči byli vyřazeni!'}
+function randDie(){return Math.floor(Math.random()*6)+1}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function addLog(t){const log=document.getElementById('log'),p=document.createElement('p');p.textContent=t;log.insertBefore(p,log.querySelector('p')||null)}
+</script>
+</body>
+</html>
