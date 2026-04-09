@@ -111,14 +111,15 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;
 .die-wrapper.hit-wrapper::after{content:'';position:absolute;inset:-5px;border-radius:16px;border:2px solid #e94560;pointer-events:none;box-shadow:0 0 14px rgba(233,69,96,.4)}
 
 .die-cube{width:80px;height:80px;position:relative;transform-style:preserve-3d;transition:transform .35s ease}
-.die-face{position:absolute;width:80px;height:80px;border-radius:10px;display:grid;padding:14px;backface-visibility:hidden;
+.die-face{position:absolute;width:80px;height:80px;border-radius:0;display:grid;padding:14px;backface-visibility:hidden;
   box-shadow:inset 0 2px 6px rgba(0,0,0,.12),inset 0 -1px 3px rgba(255,255,255,.08)}
-.face-1{transform:rotateY(0deg) translateZ(41px)}
-.face-2{transform:rotateY(90deg) translateZ(41px)}
-.face-3{transform:rotateX(90deg) translateZ(41px)}
-.face-4{transform:rotateX(-90deg) translateZ(41px)}
-.face-5{transform:rotateY(-90deg) translateZ(41px)}
-.face-6{transform:rotateY(180deg) translateZ(41px)}
+.die-face::after{content:'';position:absolute;inset:0;border-radius:12px;box-shadow:inset 0 0 0 100px rgba(0,0,0,.06);pointer-events:none}
+.face-1{transform:rotateY(0deg) translateZ(40px)}
+.face-2{transform:rotateY(90deg) translateZ(40px)}
+.face-3{transform:rotateX(90deg) translateZ(40px)}
+.face-4{transform:rotateX(-90deg) translateZ(40px)}
+.face-5{transform:rotateY(-90deg) translateZ(40px)}
+.face-6{transform:rotateY(180deg) translateZ(40px)}
 
 .die-face .dot{width:14px;height:14px;border-radius:50%;box-shadow:inset 0 2px 4px rgba(0,0,0,.35),0 1px 1px rgba(255,255,255,.1)}
 
@@ -411,35 +412,46 @@ let isAnimating=false;
 
 const FACE_ROT={1:{rx:0,ry:0},2:{rx:0,ry:-90},3:{rx:-90,ry:0},4:{rx:90,ry:0},5:{rx:0,ry:90},6:{rx:0,ry:180}};
 
+// Find nearest equivalent rotation to avoid visible snap
+// e.g. current rx=1547, target base=0 → returns 1440 (4×360) instead of 0
+function nearestRot(current,base){
+  const k=Math.round((current-base)/360);
+  return k*360+base;
+}
+
 // Dice throw animation
-// Key: wrapper handles position (2D), cube handles rotation (3D).
-// Perspective lives on wrapper, so the cube always looks 3D regardless of position.
+// Wrapper = 2D position, Cube = 3D rotation (separated to preserve perspective)
 function animateDiceThrow(diceEls,targets,onDone){
   const n=diceEls.length,states=[];
   for(let i=0;i<n;i++){
-    const spread=(i-(n-1)/2)*12+(Math.random()-.5)*8;
+    const spread=(i-(n-1)/2)*14+(Math.random()-.5)*10;
+    const r=FACE_ROT[targets[i]];
+    // Pre-calculate target rotations — we'll guide the dice toward these
+    const targetRx=r.rx+Math.round(3+Math.random()*2)*360; // 3-5 full spins + target
+    const targetRy=r.ry+Math.round(3+Math.random()*2)*360;
     states.push({
-      // Position (applied to wrapper via top/left offset)
-      x:spread, y:-160-Math.random()*40,
-      vx:spread*0.3+(Math.random()-.5)*15,
-      vy:320+Math.random()*80,
-      // Rotation (applied to cube)
-      rx:Math.random()*360, ry:Math.random()*360, rz:Math.random()*120,
-      vrx:350+Math.random()*300, vry:350+Math.random()*300, vrz:100+Math.random()*150,
-      bounces:0, settled:false, visible:false
+      x:spread, y:-140-Math.random()*30,
+      vx:spread*0.25+(Math.random()-.5)*10,
+      vy:250+Math.random()*60,
+      // Start rotation — will be guided toward target
+      rx:targetRx*0.1+Math.random()*90,
+      ry:targetRy*0.1+Math.random()*90,
+      rz:Math.random()*60,
+      targetRx:targetRx, targetRy:targetRy,
+      bounces:0, settled:false, visible:false, guiding:false
     });
   }
 
-  const GRAVITY=600; // slower, more graceful fall
-  const BOUNCE=0.35;
-  const FRICTION=0.7;
-  const ROT_BOUNCE=0.35;
+  const GRAVITY=500;
+  const BOUNCE=0.3;
+  const FRICTION=0.65;
   const MAX_BOUNCE=3;
-  const MAX_TIME=1800;
+  const THROW_DUR=900;  // ms — active throw phase
+  const GUIDE_DUR=500;  // ms — guide to final rotation
+  const TOTAL_DUR=THROW_DUR+GUIDE_DUR;
   const t0=performance.now();
   let lastT=t0;
 
-  // Prepare elements
   diceEls.forEach(({wrapper,cube})=>{
     wrapper.style.transition='none';
     wrapper.style.opacity='0';
@@ -461,77 +473,95 @@ function animateDiceThrow(diceEls,targets,onDone){
 
       if(s.settled)continue;
 
-      // Gravity + movement
-      s.vy+=GRAVITY*dt;
-      s.x+=s.vx*dt;
-      s.y+=s.vy*dt;
+      const throwProgress=Math.min(elapsed/THROW_DUR,1); // 0→1 during throw
+      const guideProgress=Math.max(0,Math.min((elapsed-THROW_DUR)/GUIDE_DUR,1)); // 0→1 during guide
 
-      // Rotation
-      s.rx+=s.vrx*dt;
-      s.ry+=s.vry*dt;
-      s.rz+=s.vrz*dt;
+      // Phase 1: Physics throw
+      if(throwProgress<1){
+        s.vy+=GRAVITY*dt;
+        s.x+=s.vx*dt;
+        s.y+=s.vy*dt;
 
-      // Gentle air drag on rotation
-      const rd=Math.pow(0.992,dt*60);
-      s.vrx*=rd; s.vry*=rd; s.vrz*=rd;
+        // Rotation speed decreases over time
+        const spinSpeed=(1-throwProgress*0.6);
+        const vrx=400*spinSpeed, vry=400*spinSpeed, vrz=120*spinSpeed;
+        s.rx+=vrx*dt*(1+Math.random()*0.1);
+        s.ry+=vry*dt*(1+Math.random()*0.1);
+        s.rz+=vrz*dt*0.5;
 
-      // Fade in when entering view
-      if(!s.visible&&s.y>-100){
+        // Floor bounce
+        if(s.y>=0){
+          s.y=0;
+          s.vy=-Math.abs(s.vy)*BOUNCE;
+          s.vx*=FRICTION;
+          s.bounces++;
+          if(s.bounces>=MAX_BOUNCE)s.vy=0;
+        }
+      }
+
+      // Phase 2: Guide rotation smoothly to target face
+      if(guideProgress>0&&guideProgress<1){
+        if(!s.guiding){
+          s.guiding=true;
+          s.guideStartRx=s.rx;
+          s.guideStartRy=s.ry;
+          s.guideStartRz=s.rz;
+          // Find nearest equivalent of target to current rotation
+          s.finalRx=nearestRot(s.rx,s.targetRx%360)+Math.floor(s.targetRx/360)*360;
+          s.finalRy=nearestRot(s.ry,s.targetRy%360)+Math.floor(s.targetRy/360)*360;
+          // Just snap rz to nearest 0
+          s.finalRz=nearestRot(s.rz,0);
+          s.guideStartX=s.x;
+          s.guideStartY=s.y;
+        }
+        // Smooth ease-out interpolation
+        const ease=1-Math.pow(1-guideProgress,3);
+        s.rx=s.guideStartRx+(s.finalRx-s.guideStartRx)*ease;
+        s.ry=s.guideStartRy+(s.finalRy-s.guideStartRy)*ease;
+        s.rz=s.guideStartRz+(s.finalRz-s.guideStartRz)*ease;
+        s.x=s.guideStartX*(1-ease);
+        s.y=s.guideStartY*(1-ease);
+      }
+
+      if(guideProgress>=1){
+        s.settled=true;
+        s.y=0; s.x=0;
+      }
+
+      // Fade in
+      if(!s.visible&&s.y>-90){
         s.visible=true;
         wrapper.style.opacity='1';
       }
 
-      // Floor bounce
-      if(s.y>=0){
-        s.y=0;
-        s.vy=-Math.abs(s.vy)*BOUNCE;
-        s.vx*=FRICTION;
-        s.vrx*=ROT_BOUNCE; s.vry*=ROT_BOUNCE; s.vrz*=ROT_BOUNCE;
-        s.bounces++;
-        if(s.bounces>=MAX_BOUNCE||Math.abs(s.vy)<20){
-          s.settled=true; s.y=0;
-        }
-      }
-
       if(!s.settled)allDone=false;
 
-      // Wrapper = position only (no 3D, no perspective issue)
       wrapper.style.transform=`translate(${s.x.toFixed(1)}px,${s.y.toFixed(1)}px)`;
-
-      // Cube = rotation only (perspective on wrapper keeps it 3D)
       cube.style.transform=`rotateX(${s.rx.toFixed(0)}deg) rotateY(${s.ry.toFixed(0)}deg) rotateZ(${s.rz.toFixed(0)}deg)`;
 
-      // Shadow
       const sh=wrapper.querySelector('.die-shadow');
       if(sh){
         const h=Math.max(0,-s.y);
         sh.style.opacity=Math.max(0,0.4-h*0.003).toFixed(2);
-        sh.style.transform=`translateX(-50%) scaleX(${(1+h*0.005).toFixed(2)})`;
+        sh.style.transform=`translateX(-50%) scaleX(${(1+h*0.004).toFixed(2)})`;
       }
     }
-
-    if(elapsed>MAX_TIME)allDone=true;
 
     if(!allDone){
       requestAnimationFrame(step);
     }else{
-      // Settle: wrapper returns to origin, cube snaps to final face
+      // Final cleanup — set exact target rotation
       for(let i=0;i<n;i++){
         const{wrapper,cube}=diceEls[i];
         const r=FACE_ROT[targets[i]];
-
         wrapper.style.opacity='1';
-        wrapper.style.transition='transform .4s cubic-bezier(.25,.8,.25,1)';
         wrapper.style.transform='translate(0,0)';
-
         cube.style.willChange='auto';
-        cube.style.transition='transform .4s cubic-bezier(.25,.8,.25,1)';
         cube.style.transform=`rotateX(${r.rx}deg) rotateY(${r.ry}deg)`;
-
         const sh=wrapper.querySelector('.die-shadow');
-        if(sh){sh.style.transition='all .4s ease';sh.style.opacity='0.35';sh.style.transform='translateX(-50%) scaleX(1)'}
+        if(sh){sh.style.opacity='0.35';sh.style.transform='translateX(-50%) scaleX(1)'}
       }
-      setTimeout(onDone,450);
+      setTimeout(onDone,50);
     }
   }
   requestAnimationFrame(step);
@@ -592,6 +622,10 @@ function buildDieDOM(val,opts={}){
   if(opts.unselected)w.classList.add('unselected-wrapper');
   if(opts.hit)w.classList.add('hit-wrapper');
   const c=document.createElement('div');c.className='die-cube';
+  // Fill gaps between faces with matching color
+  const col=selectedColor.color==='rainbow'?'#e94560':selectedColor.color;
+  c.style.background=col;
+  c.style.borderRadius='6px';
   for(let f=1;f<=6;f++)c.appendChild(createDieFace(f));
   if(!opts.animate){const r=FACE_ROT[val];c.style.transform=`rotateX(${r.rx}deg) rotateY(${r.ry}deg)`}
   const sh=document.createElement('div');sh.className='die-shadow';
