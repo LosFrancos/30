@@ -411,72 +411,126 @@ let isAnimating=false;
 
 const FACE_ROT={1:{rx:0,ry:0},2:{rx:0,ry:-90},3:{rx:-90,ry:0},4:{rx:90,ry:0},5:{rx:0,ry:90},6:{rx:0,ry:180}};
 
-// Physics throw — delta-time based for smooth animation
+// Realistic dice throw animation
 function animateDiceThrow(cubes,targets,onDone){
   const n=cubes.length,states=[];
-  const DT=1/60; // reference timestep (60fps)
   for(let i=0;i<n;i++){
-    const spread=(i-(n-1)/2)*45;
+    // Dice start grouped at top, thrown downward with horizontal spread
+    const spreadX=(i-(n-1)/2)*55+(Math.random()-.5)*20;
+    const delay=i*30+Math.random()*40; // staggered release
     states.push({
-      x:spread+(Math.random()-.5)*30, y:-320-Math.random()*100, z:220+Math.random()*120,
-      vx:(Math.random()-.5)*7, vy:1.5+Math.random()*2.5, vz:-10-Math.random()*5,
-      rx:Math.random()*360, ry:Math.random()*360, rz:Math.random()*360,
-      vrx:14+Math.random()*18, vry:14+Math.random()*18, vrz:6+Math.random()*10,
-      bounces:0, settled:false
+      x:spreadX*0.3, y:-180-Math.random()*40, // start above view
+      scl:0.4+Math.random()*0.1, // start small (far away), grow to 1 (close)
+      vx:spreadX*0.04+(Math.random()-.5)*2, vy:8+Math.random()*3, // falling down
+      vscl:0.025+Math.random()*0.008, // scale growth = approaching
+      rx:Math.random()*720, ry:Math.random()*720, rz:Math.random()*360,
+      vrx:600+Math.random()*400, vry:600+Math.random()*400, vrz:200+Math.random()*300,
+      bounces:0, settled:false, delay:delay, started:false,
+      shadowOpacity:0
     });
   }
-  const G=1.1,BD=0.33,FR=0.95,SD=0.962,MB=4,MD=1600;
+  const GRAVITY=1800; // px/s²
+  const BOUNCE_DAMP=0.35;
+  const FRICTION=0.82;
+  const ROT_DAMP=0.45; // rotation dampening on bounce
+  const MAX_BOUNCES=3;
+  const FLOOR_Y=0;
+  const MAX_DUR=1400; // hard cutoff ms
   const t0=performance.now();
   let lastTime=t0;
 
-  // Pre-set will-change for GPU acceleration
-  cubes.forEach(c=>{c.style.willChange='transform,opacity';c.style.opacity='0';c.style.transition='none'});
+  // Prep GPU layers
+  cubes.forEach((c,i)=>{
+    c.style.willChange='transform,opacity';
+    c.style.opacity='0';
+    c.style.transition='none';
+    // Also prep shadow
+    const sh=c.parentElement.querySelector('.die-shadow');
+    if(sh){sh.style.opacity='0';sh.style.transition='none'}
+  });
 
   function step(now){
     const rawDt=(now-lastTime)/1000;
-    const dt=Math.min(rawDt,0.05); // cap delta to avoid spiral on lag
-    const scale=dt/DT; // scale factor relative to 60fps
+    const dt=Math.min(rawDt,0.04); // cap to prevent spiral
     lastTime=now;
     const elapsed=now-t0;
     let allSettled=true;
 
     for(let i=0;i<n;i++){
       const s=states[i];
-      if(s.settled)continue;
 
-      s.vy+=G*scale;
-      s.x+=s.vx*scale; s.y+=s.vy*scale; s.z+=s.vz*scale;
-      s.rx+=s.vrx*scale; s.ry+=s.vry*scale; s.rz+=s.vrz*scale;
-
-      if(s.y>=0){
-        s.y=0; s.vy=-Math.abs(s.vy)*BD;
-        s.vx*=FR; s.vz*=FR*.8;
-        s.vrx*=.55; s.vry*=.55; s.vrz*=.55;
-        s.bounces++;
-        if(s.bounces>=MB||Math.abs(s.vy)<1.5){s.settled=true;s.y=0}
+      // Staggered start
+      if(!s.started){
+        if(elapsed<s.delay){allSettled=false;continue}
+        s.started=true;
+        cubes[i].style.opacity='1';
       }
 
-      const drag=Math.pow(SD,scale);
-      s.vrx*=drag; s.vry*=drag; s.vrz*=drag;
-      s.vz*=Math.pow(.91,scale);
+      if(s.settled)continue;
+
+      // Physics integration
+      s.vy+=GRAVITY*dt;
+      s.x+=s.vx*dt*60;
+      s.y+=s.vy*dt;
+      s.scl+=s.vscl*dt*60;
+      if(s.scl>1)s.scl=1;
+
+      // Rotation (degrees/second)
+      s.rx+=s.vrx*dt;
+      s.ry+=s.vry*dt;
+      s.rz+=s.vrz*dt;
+
+      // Air drag on rotation
+      const rotDrag=Math.pow(0.97,dt*60);
+      s.vrx*=rotDrag; s.vry*=rotDrag; s.vrz*=rotDrag;
+
+      // Floor collision
+      if(s.y>=FLOOR_Y){
+        s.y=FLOOR_Y;
+        s.vy=-Math.abs(s.vy)*BOUNCE_DAMP;
+        s.vx*=FRICTION;
+        s.vrx*=ROT_DAMP;
+        s.vry*=ROT_DAMP;
+        s.vrz*=ROT_DAMP;
+        s.bounces++;
+        if(s.bounces>=MAX_BOUNCES||Math.abs(s.vy)<40){
+          s.settled=true; s.y=FLOOR_Y; s.scl=1;
+        }
+      }
+
+      // Shadow responds to height
+      const height=Math.max(0,-s.y);
+      s.shadowOpacity=Math.max(0,0.35-height*0.0015);
+      const shadowScale=1+height*0.003;
 
       if(!s.settled)allSettled=false;
-      cubes[i].style.transform=`translate3d(${s.x.toFixed(1)}px,${s.y.toFixed(1)}px,${s.z.toFixed(1)}px) rotateX(${s.rx.toFixed(1)}deg) rotateY(${s.ry.toFixed(1)}deg) rotateZ(${s.rz.toFixed(1)}deg)`;
-      cubes[i].style.opacity='1';
+
+      // Apply transform — use scale instead of translateZ to avoid perspective distortion
+      cubes[i].style.transform=`translate3d(${s.x.toFixed(1)}px,${s.y.toFixed(1)}px,0px) scale(${s.scl.toFixed(3)}) rotateX(${s.rx.toFixed(1)}deg) rotateY(${s.ry.toFixed(1)}deg) rotateZ(${s.rz.toFixed(1)}deg)`;
+
+      // Shadow
+      const sh=cubes[i].parentElement.querySelector('.die-shadow');
+      if(sh){
+        sh.style.opacity=s.shadowOpacity.toFixed(2);
+        sh.style.transform=`translateX(-50%) scale(${shadowScale.toFixed(2)})`;
+      }
     }
 
-    if(elapsed>MD)allSettled=true;
+    if(elapsed>MAX_DUR)allSettled=true;
 
     if(!allSettled){
       requestAnimationFrame(step);
     }else{
+      // Settle to final face with a satisfying snap
       for(let i=0;i<n;i++){
         const r=FACE_ROT[targets[i]];
         cubes[i].style.willChange='auto';
-        cubes[i].style.transition='transform .4s cubic-bezier(.22,.68,.35,1.2)';
-        cubes[i].style.transform=`translate3d(0,0,0) rotateX(${r.rx}deg) rotateY(${r.ry}deg) rotateZ(0deg)`;
+        cubes[i].style.transition='transform .35s cubic-bezier(.22,.68,.35,1.15)';
+        cubes[i].style.transform=`translate3d(0,0,0) scale(1) rotateX(${r.rx}deg) rotateY(${r.ry}deg) rotateZ(0deg)`;
+        const sh=cubes[i].parentElement.querySelector('.die-shadow');
+        if(sh){sh.style.transition='opacity .35s ease';sh.style.opacity='0.35';sh.style.transform='translateX(-50%) scale(1)'}
       }
-      setTimeout(onDone,450);
+      setTimeout(onDone,400);
     }
   }
   requestAnimationFrame(step);
