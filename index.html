@@ -99,8 +99,8 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;
 .sum-display{font-size:1.15rem;color:#0fbcf9;margin-bottom:16px;font-weight:700}
 
 /* 3D Dice */
-.dice-container{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin:28px 0;min-height:120px;align-items:center;perspective:600px}
-.die-wrapper{width:80px;height:80px;cursor:pointer;position:relative;transition:transform .25s ease,opacity .3s ease,filter .3s ease;transform-style:preserve-3d}
+.dice-container{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin:28px 0;min-height:140px;align-items:center}
+.die-wrapper{width:80px;height:80px;perspective:500px;cursor:pointer;position:relative;transition:transform .25s ease,opacity .3s ease,filter .3s ease}
 .die-wrapper:not(.kept-wrapper):hover{transform:scale(1.10);z-index:2}
 .die-wrapper.selected-wrapper{filter:brightness(1.3) drop-shadow(0 0 16px rgba(233,69,96,.6));transform:scale(1.08);z-index:2}
 .die-wrapper.selected-wrapper::after{content:'';position:absolute;inset:-5px;border-radius:16px;border:2px solid #e94560;pointer-events:none;box-shadow:0 0 14px rgba(233,69,96,.4)}
@@ -411,50 +411,58 @@ let isAnimating=false;
 
 const FACE_ROT={1:{rx:0,ry:0},2:{rx:0,ry:-90},3:{rx:-90,ry:0},4:{rx:90,ry:0},5:{rx:0,ry:90},6:{rx:0,ry:180}};
 
-// Dice throw — tumble from above, bounce, settle to result
-function animateDiceThrow(cubes,targets,onDone){
-  const n=cubes.length,states=[];
+// Dice throw animation
+// Key: wrapper handles position (2D), cube handles rotation (3D).
+// Perspective lives on wrapper, so the cube always looks 3D regardless of position.
+function animateDiceThrow(diceEls,targets,onDone){
+  const n=diceEls.length,states=[];
   for(let i=0;i<n;i++){
-    const spread=(i-(n-1)/2)*50+(Math.random()-.5)*20;
+    const spread=(i-(n-1)/2)*12+(Math.random()-.5)*8;
     states.push({
-      x:spread*0.5, y:-200-Math.random()*60,
-      vx:spread*0.08+(Math.random()-.5)*3,
-      vy:200+Math.random()*150,
-      rx:Math.random()*360, ry:Math.random()*360, rz:Math.random()*180,
-      vrx:500+Math.random()*600, vry:500+Math.random()*600, vrz:150+Math.random()*250,
-      bounces:0, settled:false
+      // Position (applied to wrapper via top/left offset)
+      x:spread, y:-160-Math.random()*40,
+      vx:spread*0.3+(Math.random()-.5)*15,
+      vy:320+Math.random()*80,
+      // Rotation (applied to cube)
+      rx:Math.random()*360, ry:Math.random()*360, rz:Math.random()*120,
+      vrx:350+Math.random()*300, vry:350+Math.random()*300, vrz:100+Math.random()*150,
+      bounces:0, settled:false, visible:false
     });
   }
-  const t0=performance.now();
-  let lastTime=t0;
 
-  cubes.forEach(c=>{
-    c.style.willChange='transform,opacity';
-    c.style.opacity='0';
-    c.style.transition='none';
-    const sh=c.parentElement.querySelector('.die-shadow');
+  const GRAVITY=600; // slower, more graceful fall
+  const BOUNCE=0.35;
+  const FRICTION=0.7;
+  const ROT_BOUNCE=0.35;
+  const MAX_BOUNCE=3;
+  const MAX_TIME=1800;
+  const t0=performance.now();
+  let lastT=t0;
+
+  // Prepare elements
+  diceEls.forEach(({wrapper,cube})=>{
+    wrapper.style.transition='none';
+    wrapper.style.opacity='0';
+    cube.style.transition='none';
+    cube.style.willChange='transform';
+    const sh=wrapper.querySelector('.die-shadow');
     if(sh){sh.style.opacity='0';sh.style.transition='none'}
   });
 
   function step(now){
-    const dt=Math.min((now-lastTime)/1000,0.035);
-    lastTime=now;
+    const dt=Math.min((now-lastT)/1000,0.04);
+    lastT=now;
     const elapsed=now-t0;
-    let allSettled=true;
+    let allDone=true;
 
     for(let i=0;i<n;i++){
       const s=states[i];
-      if(s.settled){
-        // Keep showing settled position
-        cubes[i].style.opacity='1';
-        continue;
-      }
+      const{wrapper,cube}=diceEls[i];
 
-      // Show die once it starts falling into view
-      if(s.y>-120)cubes[i].style.opacity='1';
+      if(s.settled)continue;
 
-      // Gravity
-      s.vy+=1400*dt;
+      // Gravity + movement
+      s.vy+=GRAVITY*dt;
       s.x+=s.vx*dt;
       s.y+=s.vy*dt;
 
@@ -463,54 +471,67 @@ function animateDiceThrow(cubes,targets,onDone){
       s.ry+=s.vry*dt;
       s.rz+=s.vrz*dt;
 
-      // Drag slows rotation in air
-      const drag=Math.pow(0.985,dt*60);
-      s.vrx*=drag; s.vry*=drag; s.vrz*=drag;
+      // Gentle air drag on rotation
+      const rd=Math.pow(0.992,dt*60);
+      s.vrx*=rd; s.vry*=rd; s.vrz*=rd;
 
-      // Bounce off floor (y=0)
+      // Fade in when entering view
+      if(!s.visible&&s.y>-100){
+        s.visible=true;
+        wrapper.style.opacity='1';
+      }
+
+      // Floor bounce
       if(s.y>=0){
         s.y=0;
-        s.vy=-Math.abs(s.vy)*0.3;
-        s.vx*=0.75;
-        s.vrx*=0.4; s.vry*=0.4; s.vrz*=0.4;
+        s.vy=-Math.abs(s.vy)*BOUNCE;
+        s.vx*=FRICTION;
+        s.vrx*=ROT_BOUNCE; s.vry*=ROT_BOUNCE; s.vrz*=ROT_BOUNCE;
         s.bounces++;
-        if(s.bounces>=3||Math.abs(s.vy)<30){
+        if(s.bounces>=MAX_BOUNCE||Math.abs(s.vy)<20){
           s.settled=true; s.y=0;
         }
       }
 
-      if(!s.settled)allSettled=false;
+      if(!s.settled)allDone=false;
 
-      cubes[i].style.transform=
-        `translateX(${s.x.toFixed(1)}px) translateY(${s.y.toFixed(1)}px) rotateX(${s.rx.toFixed(0)}deg) rotateY(${s.ry.toFixed(0)}deg) rotateZ(${s.rz.toFixed(0)}deg)`;
+      // Wrapper = position only (no 3D, no perspective issue)
+      wrapper.style.transform=`translate(${s.x.toFixed(1)}px,${s.y.toFixed(1)}px)`;
 
-      // Shadow: visible & tight when close to floor, faint & spread when high
-      const sh=cubes[i].parentElement.querySelector('.die-shadow');
+      // Cube = rotation only (perspective on wrapper keeps it 3D)
+      cube.style.transform=`rotateX(${s.rx.toFixed(0)}deg) rotateY(${s.ry.toFixed(0)}deg) rotateZ(${s.rz.toFixed(0)}deg)`;
+
+      // Shadow
+      const sh=wrapper.querySelector('.die-shadow');
       if(sh){
         const h=Math.max(0,-s.y);
-        const sOp=Math.max(0,0.4-h*0.002);
-        const sSc=1+h*0.004;
-        sh.style.opacity=sOp.toFixed(2);
-        sh.style.transform=`translateX(-50%) scaleX(${sSc.toFixed(2)})`;
+        sh.style.opacity=Math.max(0,0.4-h*0.003).toFixed(2);
+        sh.style.transform=`translateX(-50%) scaleX(${(1+h*0.005).toFixed(2)})`;
       }
     }
 
-    if(elapsed>1300)allSettled=true;
+    if(elapsed>MAX_TIME)allDone=true;
 
-    if(!allSettled){
+    if(!allDone){
       requestAnimationFrame(step);
     }else{
-      // Snap to final face
+      // Settle: wrapper returns to origin, cube snaps to final face
       for(let i=0;i<n;i++){
+        const{wrapper,cube}=diceEls[i];
         const r=FACE_ROT[targets[i]];
-        cubes[i].style.willChange='auto';
-        cubes[i].style.opacity='1';
-        cubes[i].style.transition='transform .3s cubic-bezier(.25,.8,.25,1.05)';
-        cubes[i].style.transform=`rotateX(${r.rx}deg) rotateY(${r.ry}deg)`;
-        const sh=cubes[i].parentElement.querySelector('.die-shadow');
-        if(sh){sh.style.transition='all .3s ease';sh.style.opacity='0.35';sh.style.transform='translateX(-50%) scaleX(1)'}
+
+        wrapper.style.opacity='1';
+        wrapper.style.transition='transform .4s cubic-bezier(.25,.8,.25,1)';
+        wrapper.style.transform='translate(0,0)';
+
+        cube.style.willChange='auto';
+        cube.style.transition='transform .4s cubic-bezier(.25,.8,.25,1)';
+        cube.style.transform=`rotateX(${r.rx}deg) rotateY(${r.ry}deg)`;
+
+        const sh=wrapper.querySelector('.die-shadow');
+        if(sh){sh.style.transition='all .4s ease';sh.style.opacity='0.35';sh.style.transform='translateX(-50%) scaleX(1)'}
       }
-      setTimeout(onDone,350);
+      setTimeout(onDone,450);
     }
   }
   requestAnimationFrame(step);
@@ -599,13 +620,14 @@ function renderDiceStatic(){
   });
 }
 function renderDiceAnimated(onDone){
-  const c=document.getElementById('diceContainer');c.innerHTML='';const cubes=[],vals=[];
+  const c=document.getElementById('diceContainer');c.innerHTML='';const diceEls=[],vals=[];
   keptDice.forEach(d=>{c.appendChild(buildDieDOM(d.value,{kept:true}).wrapper)});
   dice.forEach((v,i)=>{
     const{wrapper,cube}=buildDieDOM(v.value,{animate:true});
-    wrapper.addEventListener('click',()=>toggleDieSelection(i));c.appendChild(wrapper);cubes.push(cube);vals.push(v.value);
+    wrapper.addEventListener('click',()=>toggleDieSelection(i));c.appendChild(wrapper);
+    diceEls.push({wrapper,cube});vals.push(v.value);
   });
-  animateDiceThrow(cubes,vals,onDone);
+  animateDiceThrow(diceEls,vals,onDone);
 }
 function renderPenaltyStatic(){
   const c=document.getElementById('diceContainer');c.innerHTML='';
@@ -613,10 +635,10 @@ function renderPenaltyStatic(){
   dice.forEach(v=>{c.appendChild(buildDieDOM(v.value,{hit:v.value===penaltyTarget}).wrapper)});
 }
 function renderPenaltyAnimated(onDone){
-  const c=document.getElementById('diceContainer');c.innerHTML='';const cubes=[],vals=[];
+  const c=document.getElementById('diceContainer');c.innerHTML='';const diceEls=[],vals=[];
   penaltyKept.forEach(d=>{c.appendChild(buildDieDOM(d.value,{kept:true}).wrapper)});
-  dice.forEach(v=>{const{wrapper,cube}=buildDieDOM(v.value,{animate:true});c.appendChild(wrapper);cubes.push(cube);vals.push(v.value)});
-  animateDiceThrow(cubes,vals,onDone);
+  dice.forEach(v=>{const{wrapper,cube}=buildDieDOM(v.value,{animate:true});c.appendChild(wrapper);diceEls.push({wrapper,cube});vals.push(v.value)});
+  animateDiceThrow(diceEls,vals,onDone);
 }
 function renderActions(){
   const el=document.getElementById('actions');el.innerHTML='';
