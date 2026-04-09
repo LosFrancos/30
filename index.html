@@ -412,45 +412,52 @@ let isAnimating=false;
 
 const FACE_ROT={1:{rx:0,ry:0},2:{rx:0,ry:-90},3:{rx:-90,ry:0},4:{rx:90,ry:0},5:{rx:0,ry:90},6:{rx:0,ry:180}};
 
-// Find nearest equivalent rotation to avoid visible snap
-// e.g. current rx=1547, target base=0 → returns 1440 (4×360) instead of 0
-function nearestRot(current,base){
-  const k=Math.round((current-base)/360);
-  return k*360+base;
-}
-
-// Dice throw animation
-// Wrapper = 2D position, Cube = 3D rotation (separated to preserve perspective)
+// Dice throw animation — two clear phases:
+// Phase 1: Dice fall, bounce, rotation naturally decelerates to target face
+// Phase 2: Dice glide from scattered positions to neat row
 function animateDiceThrow(diceEls,targets,onDone){
   const n=diceEls.length,states=[];
+
+  // Ease-out curve: fast start, natural deceleration
+  function easeOut(t){return 1-Math.pow(1-t,4)}
+
   for(let i=0;i<n;i++){
-    const spread=(i-(n-1)/2)*14+(Math.random()-.5)*10;
     const r=FACE_ROT[targets[i]];
-    // Pre-calculate target rotations — we'll guide the dice toward these
-    const targetRx=r.rx+Math.round(3+Math.random()*2)*360; // 3-5 full spins + target
-    const targetRy=r.ry+Math.round(3+Math.random()*2)*360;
+    // Scatter: each die lands at a random offset
+    const landX=(Math.random()-.5)*60+(i-(n-1)/2)*20;
+
+    // Pre-calculate TOTAL rotation so it naturally ends at target face.
+    // = several full spins + the target angle. No correction needed.
+    const spinsX=4+Math.floor(Math.random()*3); // 4-6 full turns
+    const spinsY=4+Math.floor(Math.random()*3);
+    const totalRx=r.rx+spinsX*360;
+    const totalRy=r.ry+spinsY*360;
+    const totalRz=(Math.random()-.5)*90; // slight tilt, ends at 0
+
+    // Each die has slightly different spin duration for variety
+    const spinDur=1600+Math.random()*400; // 1.6-2.0s
+
     states.push({
-      x:spread, y:-140-Math.random()*30,
-      vx:spread*0.25+(Math.random()-.5)*10,
-      vy:250+Math.random()*60,
-      // Start rotation — will be guided toward target
-      rx:targetRx*0.1+Math.random()*90,
-      ry:targetRy*0.1+Math.random()*90,
-      rz:Math.random()*60,
-      targetRx:targetRx, targetRy:targetRy,
-      bounces:0, settled:false, visible:false, guiding:false
+      // Position
+      x:landX*0.3, y:-200-Math.random()*40,
+      vx:landX*0.15+(Math.random()-.5)*8,
+      vy:180+Math.random()*40,
+      landX:landX, // where it will end up after bouncing
+      // Pre-calculated rotation path
+      totalRx, totalRy, totalRz, spinDur,
+      bounces:0, posSettled:false, visible:false
     });
   }
 
-  const GRAVITY=500;
-  const BOUNCE=0.3;
-  const FRICTION=0.65;
-  const MAX_BOUNCE=3;
-  const THROW_DUR=900;  // ms — active throw phase
-  const GUIDE_DUR=500;  // ms — guide to final rotation
-  const TOTAL_DUR=THROW_DUR+GUIDE_DUR;
+  const GRAVITY=650;
+  const BOUNCE_DAMP=0.4;
+  const BOUNCE_FRICTION=0.6;
+  const MAX_BOUNCES=4;
+  const SETTLE_DELAY=200;  // ms pause after all dice land before sliding
+  const SETTLE_DUR=600;    // ms to slide to final positions
   const t0=performance.now();
   let lastT=t0;
+  let allLandedAt=0; // timestamp when last die settled
 
   diceEls.forEach(({wrapper,cube})=>{
     wrapper.style.transition='none';
@@ -465,103 +472,92 @@ function animateDiceThrow(diceEls,targets,onDone){
     const dt=Math.min((now-lastT)/1000,0.04);
     lastT=now;
     const elapsed=now-t0;
-    let allDone=true;
 
+    // --- Update each die ---
+    let allPosSettled=true;
     for(let i=0;i<n;i++){
       const s=states[i];
       const{wrapper,cube}=diceEls[i];
 
-      if(s.settled)continue;
+      // ROTATION: follows pre-calculated path with easing.
+      // This guarantees dice always show the correct face — no snap.
+      const rotT=Math.min(elapsed/s.spinDur,1);
+      const rotEase=easeOut(rotT);
+      const rx=s.totalRx*rotEase;
+      const ry=s.totalRy*rotEase;
+      const rz=s.totalRz*rotEase;
+      cube.style.transform=`rotateX(${rx.toFixed(0)}deg) rotateY(${ry.toFixed(0)}deg) rotateZ(${rz.toFixed(0)}deg)`;
 
-      const throwProgress=Math.min(elapsed/THROW_DUR,1); // 0→1 during throw
-      const guideProgress=Math.max(0,Math.min((elapsed-THROW_DUR)/GUIDE_DUR,1)); // 0→1 during guide
-
-      // Phase 1: Physics throw
-      if(throwProgress<1){
+      // POSITION: independent physics — gravity + bounces
+      if(!s.posSettled){
         s.vy+=GRAVITY*dt;
         s.x+=s.vx*dt;
         s.y+=s.vy*dt;
 
-        // Rotation speed decreases over time
-        const spinSpeed=(1-throwProgress*0.6);
-        const vrx=400*spinSpeed, vry=400*spinSpeed, vrz=120*spinSpeed;
-        s.rx+=vrx*dt*(1+Math.random()*0.1);
-        s.ry+=vry*dt*(1+Math.random()*0.1);
-        s.rz+=vrz*dt*0.5;
-
-        // Floor bounce
         if(s.y>=0){
           s.y=0;
-          s.vy=-Math.abs(s.vy)*BOUNCE;
-          s.vx*=FRICTION;
+          s.vy=-Math.abs(s.vy)*BOUNCE_DAMP;
+          s.vx*=BOUNCE_FRICTION;
           s.bounces++;
-          if(s.bounces>=MAX_BOUNCE)s.vy=0;
+          if(s.bounces>=MAX_BOUNCES||Math.abs(s.vy)<25){
+            s.posSettled=true;
+            s.y=0;
+          }
         }
       }
 
-      // Phase 2: Guide rotation smoothly to target face
-      if(guideProgress>0&&guideProgress<1){
-        if(!s.guiding){
-          s.guiding=true;
-          s.guideStartRx=s.rx;
-          s.guideStartRy=s.ry;
-          s.guideStartRz=s.rz;
-          // Find nearest equivalent of target to current rotation
-          s.finalRx=nearestRot(s.rx,s.targetRx%360)+Math.floor(s.targetRx/360)*360;
-          s.finalRy=nearestRot(s.ry,s.targetRy%360)+Math.floor(s.targetRy/360)*360;
-          // Just snap rz to nearest 0
-          s.finalRz=nearestRot(s.rz,0);
-          s.guideStartX=s.x;
-          s.guideStartY=s.y;
-        }
-        // Smooth ease-out interpolation
-        const ease=1-Math.pow(1-guideProgress,3);
-        s.rx=s.guideStartRx+(s.finalRx-s.guideStartRx)*ease;
-        s.ry=s.guideStartRy+(s.finalRy-s.guideStartRy)*ease;
-        s.rz=s.guideStartRz+(s.finalRz-s.guideStartRz)*ease;
-        s.x=s.guideStartX*(1-ease);
-        s.y=s.guideStartY*(1-ease);
-      }
+      if(!s.posSettled)allPosSettled=false;
 
-      if(guideProgress>=1){
-        s.settled=true;
-        s.y=0; s.x=0;
-      }
-
-      // Fade in
-      if(!s.visible&&s.y>-90){
+      // Fade in when entering view
+      if(!s.visible&&s.y>-120){
         s.visible=true;
         wrapper.style.opacity='1';
       }
 
-      if(!s.settled)allDone=false;
-
       wrapper.style.transform=`translate(${s.x.toFixed(1)}px,${s.y.toFixed(1)}px)`;
-      cube.style.transform=`rotateX(${s.rx.toFixed(0)}deg) rotateY(${s.ry.toFixed(0)}deg) rotateZ(${s.rz.toFixed(0)}deg)`;
 
+      // Shadow
       const sh=wrapper.querySelector('.die-shadow');
       if(sh){
         const h=Math.max(0,-s.y);
-        sh.style.opacity=Math.max(0,0.4-h*0.003).toFixed(2);
-        sh.style.transform=`translateX(-50%) scaleX(${(1+h*0.004).toFixed(2)})`;
+        sh.style.opacity=Math.max(0,0.4-h*0.002).toFixed(2);
+        sh.style.transform=`translateX(-50%) scaleX(${(1+h*0.003).toFixed(2)})`;
       }
     }
 
-    if(!allDone){
+    // Track when all dice have landed
+    if(allPosSettled&&!allLandedAt)allLandedAt=now;
+
+    // Check if rotation is also done for all dice
+    const allSpinDone=states.every(s=>elapsed>=s.spinDur);
+
+    // Are we ready for Phase 2?
+    const readyToSettle=allPosSettled&&allSpinDone&&allLandedAt&&(now-allLandedAt>=SETTLE_DELAY);
+
+    if(!readyToSettle){
       requestAnimationFrame(step);
     }else{
-      // Final cleanup — set exact target rotation
+      // PHASE 2: Slide dice from scattered positions to neat centered row
       for(let i=0;i<n;i++){
         const{wrapper,cube}=diceEls[i];
         const r=FACE_ROT[targets[i]];
-        wrapper.style.opacity='1';
-        wrapper.style.transform='translate(0,0)';
+
+        // Set exact final rotation (clean up any floating point)
         cube.style.willChange='auto';
         cube.style.transform=`rotateX(${r.rx}deg) rotateY(${r.ry}deg)`;
+
+        // Smooth slide to center position
+        wrapper.style.transition=`transform ${SETTLE_DUR}ms cubic-bezier(.25,.8,.25,1)`;
+        wrapper.style.transform='translate(0,0)';
+
         const sh=wrapper.querySelector('.die-shadow');
-        if(sh){sh.style.opacity='0.35';sh.style.transform='translateX(-50%) scaleX(1)'}
+        if(sh){
+          sh.style.transition=`all ${SETTLE_DUR}ms ease`;
+          sh.style.opacity='0.35';
+          sh.style.transform='translateX(-50%) scaleX(1)';
+        }
       }
-      setTimeout(onDone,50);
+      setTimeout(onDone,SETTLE_DUR+50);
     }
   }
   requestAnimationFrame(step);
