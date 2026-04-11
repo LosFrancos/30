@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="cs">
 <head>
@@ -99,23 +100,20 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;
 .sum-display{font-size:1.15rem;color:#0fbcf9;margin-bottom:16px;font-weight:700}
 
 /* 3D Dice */
-.dice-container{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin:28px 0;min-height:140px;align-items:center}
-.die-wrapper{width:80px;height:80px;cursor:pointer;position:relative;transition:transform .25s ease,opacity .3s ease,filter .3s ease}
+.dice-container{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin:28px 0;min-height:120px;align-items:center;perspective:1000px}
+.die-wrapper{width:80px;height:80px;perspective:800px;cursor:pointer;position:relative;transition:transform .25s ease,opacity .3s ease,filter .3s ease}
 .die-wrapper:not(.kept-wrapper):hover{transform:scale(1.10);z-index:2}
-.die-wrapper.selected-wrapper{filter:brightness(1.3);transform:scale(1.08);z-index:2;
-  outline:2.5px solid #e94560;outline-offset:3px;border-radius:10px;
-  box-shadow:0 0 18px rgba(233,69,96,.5)}
+.die-wrapper.selected-wrapper{filter:brightness(1.3) drop-shadow(0 0 16px rgba(233,69,96,.6));transform:scale(1.08);z-index:2}
+.die-wrapper.selected-wrapper::after{content:'';position:absolute;inset:-5px;border-radius:16px;border:2px solid #e94560;pointer-events:none;box-shadow:0 0 14px rgba(233,69,96,.4)}
 .die-wrapper.selected-wrapper:hover{transform:scale(1.15)}
 .die-wrapper.unselected-wrapper{filter:brightness(.7);opacity:.7}
 .die-wrapper.kept-wrapper{cursor:default;opacity:.4;transform:scale(.85);filter:brightness(.6)}
-.die-wrapper.hit-wrapper{filter:brightness(1.3);
-  outline:2.5px solid #e94560;outline-offset:3px;border-radius:10px;
-  box-shadow:0 0 18px rgba(233,69,96,.5)}
+.die-wrapper.hit-wrapper{filter:brightness(1.3) drop-shadow(0 0 16px rgba(233,69,96,.6))}
+.die-wrapper.hit-wrapper::after{content:'';position:absolute;inset:-5px;border-radius:16px;border:2px solid #e94560;pointer-events:none;box-shadow:0 0 14px rgba(233,69,96,.4)}
 
 .die-cube{width:80px;height:80px;position:relative;transform-style:preserve-3d;transition:transform .35s ease}
-.die-face{position:absolute;width:80px;height:80px;border-radius:0;display:grid;padding:14px;backface-visibility:hidden;
+.die-face{position:absolute;width:80px;height:80px;border-radius:13px;display:grid;padding:14px;backface-visibility:hidden;
   box-shadow:inset 0 2px 6px rgba(0,0,0,.12),inset 0 -1px 3px rgba(255,255,255,.08)}
-.die-face::after{content:'';position:absolute;inset:0;border-radius:12px;box-shadow:inset 0 0 0 100px rgba(0,0,0,.06);pointer-events:none}
 .face-1{transform:rotateY(0deg) translateZ(40px)}
 .face-2{transform:rotateY(90deg) translateZ(40px)}
 .face-3{transform:rotateX(90deg) translateZ(40px)}
@@ -187,6 +185,39 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(57,255,20,.3);border-radius:3px}
+
+/* ===== RULES OVERLAY ===== */
+#rules-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(10px)}
+#rules-overlay.show{display:flex}
+#rules-box{
+  background:linear-gradient(135deg,rgba(22,33,62,.98),rgba(10,10,26,.99));
+  padding:40px 44px;border-radius:24px;max-width:620px;width:calc(100% - 32px);max-height:85vh;overflow-y:auto;
+  border:1px solid rgba(15,188,249,.25);box-shadow:0 0 80px rgba(15,188,249,.1),0 20px 60px rgba(0,0,0,.5);
+  position:relative}
+#rules-box h2{font-family:'Orbitron',sans-serif;font-size:1.6rem;color:#39ff14;
+  text-shadow:0 0 10px #39ff14,0 0 30px rgba(57,255,20,.4);margin-bottom:20px;text-align:center;letter-spacing:4px}
+#rules-box h3{font-family:'Orbitron',sans-serif;font-size:.9rem;color:#e94560;margin:20px 0 10px;letter-spacing:2px;text-transform:uppercase}
+#rules-box p,#rules-box li{font-size:1rem;line-height:1.7;color:#ccc}
+#rules-box ul{list-style:none;padding:0}
+#rules-box li{padding:4px 0 4px 20px;position:relative}
+#rules-box li::before{content:'▸';position:absolute;left:0;color:#0fbcf9;font-weight:700}
+#rules-box .rules-highlight{color:#0fbcf9;font-weight:700}
+#rules-box .rules-green{color:#39ff14;font-weight:700}
+#rules-box .rules-red{color:#e94560;font-weight:700}
+#rules-close{
+  position:absolute;top:16px;right:20px;background:none;border:none;color:#777;font-size:1.6rem;
+  cursor:pointer;transition:color .3s;line-height:1}
+#rules-close:hover{color:#e94560}
+.rules-btn{
+  padding:10px 20px;
+  background:linear-gradient(135deg,rgba(15,188,249,.8),rgba(10,143,194,.9));
+  border:1px solid rgba(15,188,249,.4);border-radius:10px;color:#fff;
+  font-family:'Orbitron',sans-serif;font-size:.7rem;font-weight:700;letter-spacing:2px;
+  cursor:pointer;text-transform:uppercase;transition:all .3s}
+.rules-btn:hover{box-shadow:0 0 20px rgba(15,188,249,.4);transform:translateY(-2px)}
+#setup .rules-btn{width:100%;margin-top:10px;padding:14px;border-radius:12px;font-size:.85rem;
+  background:linear-gradient(135deg,rgba(15,188,249,.15),rgba(15,188,249,.08));border:1px solid rgba(15,188,249,.3);color:#0fbcf9}
+#setup .rules-btn:hover{background:linear-gradient(135deg,rgba(15,188,249,.25),rgba(15,188,249,.15));box-shadow:0 0 24px rgba(15,188,249,.2)}
 </style>
 </head>
 <body>
@@ -210,6 +241,7 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;
       <div class="color-options" id="colorOptions"></div>
     </div>
     <button id="startBtn">Začít hru</button>
+    <button class="rules-btn" onclick="openRules()">Pravidla hry</button>
   </div>
 </div>
 
@@ -217,6 +249,7 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;
 <div id="game">
   <div class="game-header">
     <h1>TŘICET</h1>
+    <button class="rules-btn" onclick="openRules()">Pravidla</button>
     <button id="menuBtn" onclick="backToMenu()">Menu</button>
   </div>
   <div class="players-bar" id="playersBar"></div>
@@ -228,6 +261,53 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;
     <div class="message" id="message"></div>
   </div>
   <div class="log" id="log"><h3>Historie</h3></div>
+</div>
+
+<!-- RULES -->
+<div id="rules-overlay" onclick="if(event.target===this)closeRules()">
+  <div id="rules-box">
+    <button id="rules-close" onclick="closeRules()">&times;</button>
+    <h2>Pravidla</h2>
+
+    <h3>Cíl hry</h3>
+    <p>Každý hráč začíná s <span class="rules-highlight">30 životy</span>. Kdo přijde o všechny, vypadává. Vyhrává <span class="rules-green">poslední přeživší</span>.</p>
+
+    <h3>Jak se hraje kolo</h3>
+    <ul>
+      <li>Na začátku kola máš <span class="rules-highlight">6 kostek</span>.</li>
+      <li>Hodíš všemi kostkami.</li>
+      <li>Po každém hodu <span class="rules-red">musíš odložit alespoň 1 kostku</span> — ta se počítá do tvého součtu.</li>
+      <li>Zbylými kostkami házíš znovu. Opakuješ, dokud neodložíš všech 6.</li>
+      <li>Tvým cílem je dosáhnout součtu co nejblíž <span class="rules-green">přesně 30</span>.</li>
+    </ul>
+
+    <h3>Co se stane po kole</h3>
+    <ul>
+      <li><span class="rules-green">Součet = 30</span> — Trefa! Dostaneš <span class="rules-green">+2 životy</span> (max 30).</li>
+      <li><span class="rules-red">Součet &lt; 30</span> — Rozdíl se ti odečte jako životy. Např. součet 25 → ztratíš 5 životů.</li>
+      <li><span class="rules-highlight">Součet &gt; 30</span> — Spouští se bonusový hod (viz níže).</li>
+    </ul>
+
+    <h3>Bonusový hod (součet nad 30)</h3>
+    <ul>
+      <li>Spočítej rozdíl: součet − 30. Např. 33 → hledané číslo je <span class="rules-highlight">3</span>.</li>
+      <li>Hodíš všemi <span class="rules-highlight">6 kostkami</span> a hledáš kostky s tímto číslem.</li>
+      <li>Každou kostku s hledaným číslem odložíš.</li>
+      <li>Zbylými kostkami házíš dál, dokud padá alespoň jedna správná.</li>
+      <li>Pokud <span class="rules-red">žádná nepadne</span> → bonusový hod končí.</li>
+      <li>Pokud nasbíráš hledané číslo na <span class="rules-green">všech 6 kostkách</span> → házíš znovu všemi 6 a pokračuješ!</li>
+    </ul>
+
+    <h3>Bodování bonusu</h3>
+    <ul>
+      <li>Počet nasbíraných kostek × hodnota čísla = životy k odebrání.</li>
+      <li>Např. 4 trojky = 4 × 3 = <span class="rules-red">12 životů</span>.</li>
+      <li>Tyto životy se <span class="rules-red">odečtou dalšímu hráči</span> v pořadí — ne tobě!</li>
+    </ul>
+
+    <h3>Konec hry</h3>
+    <p>Hra pokračuje dokola, dokud nezbude jen jeden hráč. Ten je <span class="rules-green">vítěz</span>!</p>
+  </div>
 </div>
 
 <!-- WINNER -->
@@ -414,155 +494,52 @@ let isAnimating=false;
 
 const FACE_ROT={1:{rx:0,ry:0},2:{rx:0,ry:-90},3:{rx:-90,ry:0},4:{rx:90,ry:0},5:{rx:0,ry:90},6:{rx:0,ry:180}};
 
-// Dice throw animation — two clear phases:
-// Phase 1: Dice fall, bounce, rotation naturally decelerates to target face
-// Phase 2: Dice glide from scattered positions to neat row
-function animateDiceThrow(diceEls,targets,onDone){
-  const n=diceEls.length,states=[];
-
-  // Ease-out curve: fast start, natural deceleration
-  function easeOut(t){return 1-Math.pow(1-t,4)}
-
+// Physics throw
+function animateDiceThrow(cubes,targets,onDone){
+  const n=cubes.length,states=[];
   for(let i=0;i<n;i++){
-    const r=FACE_ROT[targets[i]];
-    // Scatter: each die lands at a random offset
-    const landX=(Math.random()-.5)*60+(i-(n-1)/2)*20;
-
-    // Pre-calculate TOTAL rotation so it naturally ends at target face.
-    // = several full spins + the target angle. No correction needed.
-    const spinsX=4+Math.floor(Math.random()*3); // 4-6 full turns
-    const spinsY=4+Math.floor(Math.random()*3);
-    const totalRx=r.rx+spinsX*360;
-    const totalRy=r.ry+spinsY*360;
-    const totalRz=0; // no Z tilt — dice always land flat, never on edge
-
-    // Each die has slightly different spin duration for variety
-    const spinDur=1600+Math.random()*400; // 1.6-2.0s
-
+    const spread=(i-(n-1)/2)*45;
     states.push({
-      // Position
-      x:landX*0.3, y:-200-Math.random()*40,
-      vx:landX*0.15+(Math.random()-.5)*8,
-      vy:180+Math.random()*40,
-      landX:landX, // where it will end up after bouncing
-      // Pre-calculated rotation path
-      totalRx, totalRy, totalRz, spinDur,
-      bounces:0, posSettled:false, visible:false
+      x:spread+(Math.random()-.5)*30, y:-320-Math.random()*100, z:220+Math.random()*120,
+      vx:(Math.random()-.5)*7, vy:1.5+Math.random()*2.5, vz:-10-Math.random()*5,
+      rx:Math.random()*360, ry:Math.random()*360, rz:Math.random()*360,
+      vrx:14+Math.random()*18, vry:14+Math.random()*18, vrz:6+Math.random()*10,
+      bounces:0, settled:false
     });
   }
-
-  const GRAVITY=650;
-  const BOUNCE_DAMP=0.4;
-  const BOUNCE_FRICTION=0.6;
-  const MAX_BOUNCES=4;
-  const SETTLE_DELAY=200;  // ms pause after all dice land before sliding
-  const SETTLE_DUR=600;    // ms to slide to final positions
-  const t0=performance.now();
-  let lastT=t0;
-  let allLandedAt=0; // timestamp when last die settled
-
-  diceEls.forEach(({wrapper,cube})=>{
-    wrapper.style.transition='none';
-    wrapper.style.opacity='0';
-    cube.style.transition='none';
-    cube.style.willChange='transform';
-    const sh=wrapper.querySelector('.die-shadow');
-    if(sh){sh.style.opacity='0';sh.style.transition='none'}
-  });
+  const G=1.1,BD=0.33,FR=0.95,SD=0.962,MB=4,t0=performance.now(),MD=1900;
 
   function step(now){
-    const dt=Math.min((now-lastT)/1000,0.04);
-    lastT=now;
-    const elapsed=now-t0;
-
-    // --- Update each die ---
-    let allPosSettled=true;
+    const el=now-t0;let all=true;
     for(let i=0;i<n;i++){
-      const s=states[i];
-      const{wrapper,cube}=diceEls[i];
-
-      // ROTATION: follows pre-calculated path with easing.
-      // This guarantees dice always show the correct face — no snap.
-      const rotT=Math.min(elapsed/s.spinDur,1);
-      const rotEase=easeOut(rotT);
-      const rx=s.totalRx*rotEase;
-      const ry=s.totalRy*rotEase;
-      const rz=s.totalRz*rotEase;
-      cube.style.transform=`rotateX(${rx.toFixed(0)}deg) rotateY(${ry.toFixed(0)}deg) rotateZ(${rz.toFixed(0)}deg)`;
-
-      // POSITION: independent physics — gravity + bounces
-      if(!s.posSettled){
-        s.vy+=GRAVITY*dt;
-        s.x+=s.vx*dt;
-        s.y+=s.vy*dt;
-
-        if(s.y>=0){
-          s.y=0;
-          s.vy=-Math.abs(s.vy)*BOUNCE_DAMP;
-          s.vx*=BOUNCE_FRICTION;
-          s.bounces++;
-          if(s.bounces>=MAX_BOUNCES||Math.abs(s.vy)<25){
-            s.posSettled=true;
-            s.y=0;
-          }
-        }
+      const s=states[i];if(s.settled)continue;
+      s.vy+=G; s.x+=s.vx; s.y+=s.vy; s.z+=s.vz;
+      s.rx+=s.vrx; s.ry+=s.vry; s.rz+=s.vrz;
+      if(s.y>=0){
+        s.y=0; s.vy=-Math.abs(s.vy)*BD;
+        s.vx*=FR; s.vz*=FR*.8;
+        s.vrx*=.55; s.vry*=.55; s.vrz*=.55;
+        s.bounces++;
+        if(s.bounces>=MB||Math.abs(s.vy)<1.5){s.settled=true;s.y=0}
       }
-
-      if(!s.posSettled)allPosSettled=false;
-
-      // Fade in when entering view
-      if(!s.visible&&s.y>-120){
-        s.visible=true;
-        wrapper.style.opacity='1';
-      }
-
-      wrapper.style.transform=`translate(${s.x.toFixed(1)}px,${s.y.toFixed(1)}px)`;
-
-      // Shadow
-      const sh=wrapper.querySelector('.die-shadow');
-      if(sh){
-        const h=Math.max(0,-s.y);
-        sh.style.opacity=Math.max(0,0.4-h*0.002).toFixed(2);
-        sh.style.transform=`translateX(-50%) scaleX(${(1+h*0.003).toFixed(2)})`;
-      }
+      s.vrx*=SD; s.vry*=SD; s.vrz*=SD; s.vz*=.91;
+      if(!s.settled)all=false;
+      cubes[i].style.transform=`translate3d(${s.x}px,${s.y}px,${s.z}px) rotateX(${s.rx}deg) rotateY(${s.ry}deg) rotateZ(${s.rz}deg)`;
+      cubes[i].style.opacity='1';
     }
-
-    // Track when all dice have landed
-    if(allPosSettled&&!allLandedAt)allLandedAt=now;
-
-    // Check if rotation is also done for all dice
-    const allSpinDone=states.every(s=>elapsed>=s.spinDur);
-
-    // Are we ready for Phase 2?
-    const readyToSettle=allPosSettled&&allSpinDone&&allLandedAt&&(now-allLandedAt>=SETTLE_DELAY);
-
-    if(!readyToSettle){
-      requestAnimationFrame(step);
-    }else{
-      // PHASE 2: Slide dice from scattered positions to neat centered row
+    if(el>MD)all=true;
+    if(!all){requestAnimationFrame(step)}
+    else{
       for(let i=0;i<n;i++){
-        const{wrapper,cube}=diceEls[i];
         const r=FACE_ROT[targets[i]];
-
-        // Set exact final rotation (clean up any floating point)
-        cube.style.willChange='auto';
-        cube.style.transform=`rotateX(${r.rx}deg) rotateY(${r.ry}deg)`;
-
-        // Smooth slide to center position
-        wrapper.style.transition=`transform ${SETTLE_DUR}ms cubic-bezier(.25,.8,.25,1)`;
-        wrapper.style.transform='translate(0,0)';
-
-        const sh=wrapper.querySelector('.die-shadow');
-        if(sh){
-          sh.style.transition=`all ${SETTLE_DUR}ms ease`;
-          sh.style.opacity='0.35';
-          sh.style.transform='translateX(-50%) scaleX(1)';
-        }
+        cubes[i].style.transition='transform .4s cubic-bezier(.25,.8,.25,1)';
+        cubes[i].style.transform=`translate3d(0,0,0) rotateX(${r.rx}deg) rotateY(${r.ry}deg) rotateZ(0deg)`;
       }
-      setTimeout(onDone,SETTLE_DUR+50);
+      setTimeout(onDone,450);
     }
   }
-  requestAnimationFrame(step);
+  cubes.forEach(c=>{c.style.opacity='0';c.style.transition='none'});
+  requestAnimationFrame(()=>requestAnimationFrame(step));
 }
 
 // Color picker
@@ -597,6 +574,9 @@ document.getElementById('startBtn').addEventListener('click',()=>{
   currentPlayerIdx=0;skipDeadPlayers();startTurn();
 });
 
+function openRules(){document.getElementById('rules-overlay').classList.add('show')}
+function closeRules(){document.getElementById('rules-overlay').classList.remove('show')}
+
 function backToMenu(){
   document.getElementById('game').style.display='none';
   document.getElementById('hero').style.display='flex';
@@ -620,10 +600,6 @@ function buildDieDOM(val,opts={}){
   if(opts.unselected)w.classList.add('unselected-wrapper');
   if(opts.hit)w.classList.add('hit-wrapper');
   const c=document.createElement('div');c.className='die-cube';
-  // Fill gaps between faces with matching color
-  const col=selectedColor.color==='rainbow'?'#e94560':selectedColor.color;
-  c.style.background=col;
-  c.style.borderRadius='6px';
   for(let f=1;f<=6;f++)c.appendChild(createDieFace(f));
   if(!opts.animate){const r=FACE_ROT[val];c.style.transform=`rotateX(${r.rx}deg) rotateY(${r.ry}deg)`}
   const sh=document.createElement('div');sh.className='die-shadow';
@@ -652,14 +628,13 @@ function renderDiceStatic(){
   });
 }
 function renderDiceAnimated(onDone){
-  const c=document.getElementById('diceContainer');c.innerHTML='';const diceEls=[],vals=[];
+  const c=document.getElementById('diceContainer');c.innerHTML='';const cubes=[],vals=[];
   keptDice.forEach(d=>{c.appendChild(buildDieDOM(d.value,{kept:true}).wrapper)});
   dice.forEach((v,i)=>{
     const{wrapper,cube}=buildDieDOM(v.value,{animate:true});
-    wrapper.addEventListener('click',()=>toggleDieSelection(i));c.appendChild(wrapper);
-    diceEls.push({wrapper,cube});vals.push(v.value);
+    wrapper.addEventListener('click',()=>toggleDieSelection(i));c.appendChild(wrapper);cubes.push(cube);vals.push(v.value);
   });
-  animateDiceThrow(diceEls,vals,onDone);
+  animateDiceThrow(cubes,vals,onDone);
 }
 function renderPenaltyStatic(){
   const c=document.getElementById('diceContainer');c.innerHTML='';
@@ -667,10 +642,10 @@ function renderPenaltyStatic(){
   dice.forEach(v=>{c.appendChild(buildDieDOM(v.value,{hit:v.value===penaltyTarget}).wrapper)});
 }
 function renderPenaltyAnimated(onDone){
-  const c=document.getElementById('diceContainer');c.innerHTML='';const diceEls=[],vals=[];
+  const c=document.getElementById('diceContainer');c.innerHTML='';const cubes=[],vals=[];
   penaltyKept.forEach(d=>{c.appendChild(buildDieDOM(d.value,{kept:true}).wrapper)});
-  dice.forEach(v=>{const{wrapper,cube}=buildDieDOM(v.value,{animate:true});c.appendChild(wrapper);diceEls.push({wrapper,cube});vals.push(v.value)});
-  animateDiceThrow(diceEls,vals,onDone);
+  dice.forEach(v=>{const{wrapper,cube}=buildDieDOM(v.value,{animate:true});c.appendChild(wrapper);cubes.push(cube);vals.push(v.value)});
+  animateDiceThrow(cubes,vals,onDone);
 }
 function renderActions(){
   const el=document.getElementById('actions');el.innerHTML='';
